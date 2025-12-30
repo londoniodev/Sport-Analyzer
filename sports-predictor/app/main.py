@@ -171,9 +171,9 @@ def main():
             ), unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════
-    # MOBILE BOTTOM NAVIGATION
+    # MOBILE BOTTOM NAVIGATION (Disabled - causing rerun loop)
     # ═══════════════════════════════════════════════════════
-    render_bottom_nav()
+    # render_bottom_nav()
 
 
 if __name__ == "__main__":
