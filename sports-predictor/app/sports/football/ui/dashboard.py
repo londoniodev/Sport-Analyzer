@@ -179,27 +179,3 @@ def show_dashboard():
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error Lesiones: {e}")
-    
-    st.markdown("---")
-    
-    # Quick Cache Clear (only useful action)
-    st.markdown(f"### {render_icon('bolt')} Utilidades", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Limpiar Caché Local", use_container_width=True):
-            st.cache_data.clear()
-            st.success("Caché eliminado correctamente")
-    
-    with col2:
-        if st.button("Limpiar Ligas No Prioritarias", use_container_width=True, help="Elimina de la BD cualquier liga que no esté en la whitelist"):
-            with st.spinner("Limpiando..."):
-                try:
-                    from app.sports.football.etl import FootballETL
-                    etl = FootballETL()
-                    res = etl.cleanup_non_priority_data()
-                    st.success(f"Eliminadas: {res.get('removed_leagues', 0)} ligas")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
