@@ -90,108 +90,96 @@ def show_dashboard():
     st.markdown("---")
     
     # ═══════════════════════════════════════════════════════
-    # DYNAMIC LEAGUE SELECTOR (REDESIGNED)
+    # SYNC SECTION - REDESIGNED
     # ═══════════════════════════════════════════════════════
     st.markdown(f"### {render_icon('sync')} Sincronización de Datos", unsafe_allow_html=True)
     
-    # Main Card Container
-    with st.container():
-        st.markdown(f"""
-        <div style="background-color: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
-            <h4 style="margin-top: 0; margin-bottom: 20px; color: var(--text-primary);">{render_icon('settings')} Configuración de Descarga</h4>
-        """, unsafe_allow_html=True)
+    # Build league options - dynamic from DB or fallback to hardcoded
+    if leagues_in_db:
+        regions = {}
+        for league in leagues_in_db:
+            region = league.region or "Other"
+            if region not in regions:
+                regions[region] = []
+            regions[region].append((league.id, f"{league.name} ({league.country})"))
         
-        # Build league options - dynamic from DB or fallback to hardcoded
-        if leagues_in_db:
-            # Group by region
-            regions = {}
-            for league in leagues_in_db:
-                region = league.region or "Other"
-                if region not in regions:
-                    regions[region] = []
-                regions[region].append((league.id, f"{league.name} ({league.country})"))
-            
-            # Flatten with region headers
-            league_options = []
-            for region in sorted(regions.keys()):
-                for league_tuple in sorted(regions[region], key=lambda x: x[1]):
-                    league_options.append(league_tuple)
-        else:
-            # Fallback hardcoded options (Whitelisted only)
-            league_options = [
-                (39, "Premier League (Inglaterra)"),
-                (140, "La Liga (España)"),
-                (135, "Serie A (Italia)"),
-                (78, "Bundesliga (Alemania)"),
-                (61, "Ligue 1 (Francia)"),
-                (2, "Champions League"),
-                (13, "Copa Libertadores"),
-                (239, "Liga BetPlay (Colombia)"),
-                (128, "Liga Argentina"),
-                (71, "Brasileirão"),
-                (253, "MLS (USA)"),
-                (262, "Liga MX"),
-                (3, "Europa League"),
-                (11, "Copa Sudamericana"),
-                (40, "Championship"),
-                (94, "Primeira Liga"),
-                (88, "Eredivisie"),
-            ]
-        
-        # ROW 1: Filters & Config
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            # Region filter
-            available_regions = list(set([l.region for l in leagues_in_db if l.region])) if leagues_in_db else []
-            if available_regions:
-                # Custom label with icon hack using columns for label alignment if needed, but selectbox label support is limited.
-                # Using plain text for professional look
-                selected_region = st.selectbox(
-                    "Filtrar por Región",
-                    options=["Todas"] + sorted(available_regions),
-                    index=0,
-                    help="Filtra la lista de competiciones por continente"
-                )
-                if selected_region != "Todas":
-                    league_options = [(l.id, f"{l.name} ({l.country})") for l in leagues_in_db if l.region == selected_region]
-            else:
-                 st.info("Sincroniza ligas para ver filtros")
+        league_options = []
+        for region in sorted(regions.keys()):
+            for league_tuple in sorted(regions[region], key=lambda x: x[1]):
+                league_options.append(league_tuple)
+        available_regions = list(set([l.region for l in leagues_in_db if l.region]))
+    else:
+        league_options = [
+            (39, "Premier League (Inglaterra)"),
+            (140, "La Liga (España)"),
+            (135, "Serie A (Italia)"),
+            (78, "Bundesliga (Alemania)"),
+            (61, "Ligue 1 (Francia)"),
+            (2, "Champions League"),
+            (13, "Copa Libertadores"),
+            (239, "Liga BetPlay (Colombia)"),
+            (128, "Liga Argentina"),
+            (71, "Brasileirão"),
+            (253, "MLS (USA)"),
+            (262, "Liga MX"),
+            (3, "Europa League"),
+            (11, "Copa Sudamericana"),
+            (40, "Championship"),
+            (94, "Primeira Liga"),
+            (88, "Eredivisie"),
+        ]
+        available_regions = []
 
-        with c2:
+    # Main sync card with expander for cleaner look
+    with st.expander("Configuración de Descarga", expanded=True):
+        
+        # Row 1: League and Season (2:1 ratio)
+        col_league, col_season = st.columns([3, 1])
+        
+        with col_league:
+            league_id = st.selectbox(
+                "Competición",
+                options=league_options,
+                format_func=lambda x: x[1],
+                label_visibility="visible"
+            )
+        
+        with col_season:
             season = st.selectbox(
                 "Temporada",
                 options=[2026, 2025, 2024, 2023, 2022],
-                index=0 # 2026 as default
+                index=0
             )
-
-        with c3:
-            st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True) # Align checkbox with selectboxes
-            sync_details = st.checkbox("Incluir Detalles (Alineaciones)", value=False, 
-                                       help="Descarga lineups y stats de jugadores. Consume más tiempo.")
-
-        # ROW 2: League Selector (Full Width)
-        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-        league_id = st.selectbox(
-            "Competición",
-            options=league_options,
-            format_func=lambda x: x[1]
-        )
         
-        st.markdown("</div>", unsafe_allow_html=True) # End Card HTML
+        # Row 2: Region filter and Details checkbox (only if leagues exist)
+        if available_regions:
+            col_region, col_details = st.columns([2, 1])
+            with col_region:
+                selected_region = st.selectbox(
+                    "Filtrar por Región",
+                    options=["Todas"] + sorted(available_regions),
+                    index=0
+                )
+                if selected_region != "Todas":
+                    league_options = [(l.id, f"{l.name} ({l.country})") for l in leagues_in_db if l.region == selected_region]
+            with col_details:
+                sync_details = st.checkbox("Incluir Detalles", value=False, help="Descarga lineups y estadísticas de jugadores")
+        else:
+            sync_details = st.checkbox("Incluir Detalles (Alineaciones)", value=False, help="Descarga lineups y estadísticas de jugadores")
         
-        # ROW 3: Actions (Buttons)
-        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Row 3: Action buttons
         b1, b2, b3 = st.columns(3)
         
         with b1:
-             sync_button = st.button("Sincronizar Liga", type="primary", use_container_width=True, help="Descarga partidos de la liga seleccionada")
+            sync_button = st.button("Sincronizar Liga", type="primary", use_container_width=True)
         
         with b2:
-             batch_btn = st.button("Sync Prioritarias (Batch)", type="secondary", use_container_width=True, help="Descarga TODAS las ligas Tier 1 y 2")
+            batch_btn = st.button("Sync Prioritarias", type="secondary", use_container_width=True, help="Todas las Tier 1 y 2")
              
         with b3:
-             injuries_btn = st.button("Sync Lesiones", type="secondary", use_container_width=True, help="Descarga reporte de lesionados")
+            injuries_btn = st.button("Sync Lesiones", type="secondary", use_container_width=True)
 
         # Logic implementation
         if sync_button:
