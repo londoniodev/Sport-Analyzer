@@ -16,6 +16,7 @@ import streamlit as st
 from app.core.database import init_db
 from app.core.registry import SportRegistry
 from app.ui.theme import get_theme_css, render_icon, render_feature_card
+from app.ui.nav import render_bottom_nav
 import app.sports.football # Trigger registration
 
 
@@ -191,6 +192,11 @@ def main():
             st.markdown(render_feature_card(
                 "trending_up", "Value Bets", "Detección automática de oportunidades de mercado."
             ), unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════
+    # MOBILE BOTTOM NAVIGATION
+    # ═══════════════════════════════════════════════════════
+    render_bottom_nav()
 
 
 if __name__ == "__main__":

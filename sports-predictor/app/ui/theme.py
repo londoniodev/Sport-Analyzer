@@ -327,9 +327,80 @@ DARK_THEME = f"""
 </style>
 """
 
+MOBILE_NAV_CSS = """
+<style>
+    /* Mobile Navigation Container */
+    /* Target the parent container of the anchor using :has() */
+    div[data-testid="stVerticalBlock"]:has(#mobile-nav-anchor) {
+        /* Desktop: Hidden */
+        display: none;
+    }
+
+    /* Mobile Media Query */
+    @media (max-width: 768px) {
+        div[data-testid="stVerticalBlock"]:has(#mobile-nav-anchor) {
+            display: flex;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 999999;
+            background: rgba(255, 255, 255, 0.95); /* Light theme default */
+            border-top: 1px solid var(--border);
+            padding: 8px 12px 20px 12px; /* Extra bottom padding for safe area */
+            gap: 8px;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
+        /* Dark mode overrides applied automatically via CSS variables 
+           but we explicitly set background for robustness */
+        .stApp[data-theme="dark"] div[data-testid="stVerticalBlock"]:has(#mobile-nav-anchor) {
+            background: rgba(15, 23, 42, 0.95);
+        }
+
+        /* Styling the buttons inside the nav */
+        div[data-testid="stVerticalBlock"]:has(#mobile-nav-anchor) button {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            color: var(--text-secondary) !important;
+            padding: 4px !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: auto !important;
+            min-height: 50px;
+            gap: 4px;
+        }
+
+        /* Active state (Primary buttons in Streamlit) */
+        div[data-testid="stVerticalBlock"]:has(#mobile-nav-anchor) button[kind="primary"] {
+            color: var(--accent) !important;
+            background: rgba(59, 130, 246, 0.1) !important;
+            border-radius: 8px;
+        }
+        
+        div[data-testid="stVerticalBlock"]:has(#mobile-nav-anchor) button:hover {
+            color: var(--accent) !important;
+        }
+        
+        /* Adjust main content padding to prevent overlap */
+        .block-container {
+            padding-bottom: 90px !important;
+        }
+    }
+</style>
+"""
+
 def get_theme_css(is_dark: bool = True) -> str:
     """Return CSS for the selected theme."""
-    return DARK_THEME if is_dark else LIGHT_THEME
+    base_theme = DARK_THEME if is_dark else LIGHT_THEME
+    return base_theme + MOBILE_NAV_CSS
 
 
 def render_icon(name: str, size: str = "normal", color: str = "inherit") -> str:
