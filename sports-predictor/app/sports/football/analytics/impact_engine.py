@@ -76,57 +76,96 @@ def get_team_goals_with_player(team_id: int, player_id: int, session: Session) -
     return total_goals / total_matches if total_matches > 0 else 0.0
 
 
-def calculate_player_contribution(player_id: int, team_id: int, session: Session) -> Dict[str, float]:
+def calculate_player_contribution(player_id: int, team_id: int, session: Session, season: int = 2026) -> Dict[str, float]:
     """
     Calculate a player's xGC (Expected Goal Contributions) and their percentage
     of the team's total offensive output.
     
-    Based on academic research: xGC = Goals + Assists (or xG + xA if available)
+    Uses PlayerSeasonStats (xG, xA) when available for more accurate calculations.
+    Falls back to raw goals/assists from PlayerMatchStats if advanced stats unavailable.
+    
+    Based on academic research: xGC = xG + xA (Expected Goals + Expected Assists)
     
     Returns:
         {
             "goals": int,
             "assists": int,
-            "xgc": float (goals + assists),
+            "xg": float (expected goals),
+            "xa": float (expected assists),
+            "xgc": float (xG + xA or goals + assists),
             "team_total_xgc": float,
-            "contribution_pct": float (0.0 to 1.0)
+            "contribution_pct": float (0.0 to 1.0),
+            "data_source": str ("season_stats" or "match_stats")
         }
     """
-    # Get player's total goals and assists from match stats
-    player_stats_stmt = select(
-        func.sum(PlayerMatchStats.goals),
-        func.sum(PlayerMatchStats.assists)
-    ).where(
-        PlayerMatchStats.player_id == player_id,
-        PlayerMatchStats.team_id == team_id
-    )
-    result = session.exec(player_stats_stmt).first()
+    # Try to get advanced stats from PlayerSeasonStats first
+    season_stats = session.get(PlayerSeasonStats, (player_id, team_id, season))
     
-    player_goals = result[0] or 0 if result else 0
-    player_assists = result[1] or 0 if result else 0
-    player_xgc = player_goals + player_assists
-    
-    # Get team's total goals and assists from all players
-    team_stats_stmt = select(
-        func.sum(PlayerMatchStats.goals),
-        func.sum(PlayerMatchStats.assists)
-    ).where(
-        PlayerMatchStats.team_id == team_id
-    )
-    team_result = session.exec(team_stats_stmt).first()
-    
-    team_total_goals = team_result[0] or 0 if team_result else 0
-    team_total_assists = team_result[1] or 0 if team_result else 0
-    team_total_xgc = team_total_goals + team_total_assists
+    if season_stats and (season_stats.xg is not None or season_stats.xa is not None):
+        # Use advanced xG/xA stats
+        player_xg = season_stats.xg or 0.0
+        player_xa = season_stats.xa or 0.0
+        player_xgc = season_stats.xgc or (player_xg + player_xa)
+        player_goals = season_stats.goals or 0
+        player_assists = season_stats.assists or 0
+        data_source = "season_stats"
+        
+        # Get team totals from PlayerSeasonStats
+        team_stats_stmt = select(
+            func.sum(PlayerSeasonStats.xg),
+            func.sum(PlayerSeasonStats.xa),
+            func.sum(PlayerSeasonStats.xgc)
+        ).where(
+            PlayerSeasonStats.team_id == team_id,
+            PlayerSeasonStats.season == season
+        )
+        team_result = session.exec(team_stats_stmt).first()
+        
+        team_total_xgc = team_result[2] or 0.0 if team_result else 0.0
+        if team_total_xgc == 0.0 and team_result:
+            team_total_xgc = (team_result[0] or 0.0) + (team_result[1] or 0.0)
+    else:
+        # Fallback to raw goals/assists from PlayerMatchStats
+        player_stats_stmt = select(
+            func.sum(PlayerMatchStats.goals),
+            func.sum(PlayerMatchStats.assists)
+        ).where(
+            PlayerMatchStats.player_id == player_id,
+            PlayerMatchStats.team_id == team_id
+        )
+        result = session.exec(player_stats_stmt).first()
+        
+        player_goals = result[0] or 0 if result else 0
+        player_assists = result[1] or 0 if result else 0
+        player_xg = float(player_goals)  # Approximate xG with actual goals
+        player_xa = float(player_assists)
+        player_xgc = player_goals + player_assists
+        data_source = "match_stats"
+        
+        # Get team totals from PlayerMatchStats
+        team_stats_stmt = select(
+            func.sum(PlayerMatchStats.goals),
+            func.sum(PlayerMatchStats.assists)
+        ).where(
+            PlayerMatchStats.team_id == team_id
+        )
+        team_result = session.exec(team_stats_stmt).first()
+        
+        team_total_goals = team_result[0] or 0 if team_result else 0
+        team_total_assists = team_result[1] or 0 if team_result else 0
+        team_total_xgc = team_total_goals + team_total_assists
     
     contribution_pct = player_xgc / team_total_xgc if team_total_xgc > 0 else 0.0
     
     return {
         "goals": player_goals,
         "assists": player_assists,
+        "xg": player_xg,
+        "xa": player_xa,
         "xgc": player_xgc,
         "team_total_xgc": team_total_xgc,
-        "contribution_pct": contribution_pct
+        "contribution_pct": contribution_pct,
+        "data_source": data_source
     }
 
 
@@ -165,14 +204,43 @@ def adjust_xg_for_lineup(
     return adjusted_xg
 
 
-def get_top_contributors(team_id: int, session: Session, limit: int = 5) -> List[Dict]:
+def get_top_contributors(team_id: int, session: Session, season: int = 2026, limit: int = 5) -> List[Dict]:
     """
     Get the top goal contributors for a team.
     
-    Returns list of players sorted by xGC (goals + assists).
+    Uses PlayerSeasonStats (xG, xA) when available, falls back to PlayerMatchStats.
+    Returns list of players sorted by xGC.
     """
-    # Get all players with stats for the team
-    stmt = select(
+    # First try to get from PlayerSeasonStats (more accurate)
+    season_stmt = select(PlayerSeasonStats).where(
+        PlayerSeasonStats.team_id == team_id,
+        PlayerSeasonStats.season == season
+    ).order_by(
+        PlayerSeasonStats.xgc.desc()
+    ).limit(limit)
+    
+    season_results = session.exec(season_stmt).all()
+    
+    if season_results:
+        # Use season stats
+        contributors = []
+        for stats in season_results:
+            player = session.get(Player, stats.player_id)
+            contributors.append({
+                "player_id": stats.player_id,
+                "name": player.name if player else "Unknown",
+                "position": player.position if player else None,
+                "goals": stats.goals or 0,
+                "assists": stats.assists or 0,
+                "xg": stats.xg or 0.0,
+                "xa": stats.xa or 0.0,
+                "xgc": stats.xgc or ((stats.xg or 0) + (stats.xa or 0)),
+                "data_source": "season_stats"
+            })
+        return contributors
+    
+    # Fallback to PlayerMatchStats
+    match_stmt = select(
         PlayerMatchStats.player_id,
         func.sum(PlayerMatchStats.goals).label("total_goals"),
         func.sum(PlayerMatchStats.assists).label("total_assists")
@@ -184,7 +252,7 @@ def get_top_contributors(team_id: int, session: Session, limit: int = 5) -> List
         (func.sum(PlayerMatchStats.goals) + func.sum(PlayerMatchStats.assists)).desc()
     ).limit(limit)
     
-    results = session.exec(stmt).all()
+    results = session.exec(match_stmt).all()
     
     contributors = []
     for player_id, goals, assists in results:
@@ -197,25 +265,31 @@ def get_top_contributors(team_id: int, session: Session, limit: int = 5) -> List
             "position": player.position if player else None,
             "goals": goals or 0,
             "assists": assists or 0,
-            "xgc": xgc
+            "xg": float(goals or 0),
+            "xa": float(assists or 0),
+            "xgc": xgc,
+            "data_source": "match_stats"
         })
     
     return contributors
 
 
-def get_player_impact_score(player_id: int, team_id: int, session: Session) -> dict:
+def get_player_impact_score(player_id: int, team_id: int, session: Session, season: int = 2026) -> dict:
     """
     Calculate a player's overall impact score based on various metrics.
     Returns a dict with impact scores for different categories.
     """
     corners_impact = get_team_corners_with_player(team_id, player_id, session)
     goals_impact = get_team_goals_with_player(team_id, player_id, session)
-    contribution = calculate_player_contribution(player_id, team_id, session)
+    contribution = calculate_player_contribution(player_id, team_id, session, season)
     
     return {
         "corners_impact": corners_impact,
         "goals_impact": goals_impact,
+        "xg": contribution["xg"],
+        "xa": contribution["xa"],
         "xgc": contribution["xgc"],
         "contribution_pct": contribution["contribution_pct"],
-        "overall_impact": contribution["contribution_pct"]  # Main metric
+        "data_source": contribution["data_source"],
+        "overall_impact": contribution["contribution_pct"]
     }

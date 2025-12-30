@@ -1,16 +1,99 @@
 """
-Football Prediction View - Modern UI for Match Predictions.
+Football Prediction View - Integrated with Database.
+Loads teams and calculates stats from match history.
 """
 import streamlit as st
+from sqlmodel import select
 from app.ui.theme import render_probability_bar, render_metric_card, render_icon
 from app.sports.football.predictions import (
     PoissonModel, GoalsPredictor, MatchResultPredictor,
-    CornersPredictor, HandicapPredictor, ExactScorePredictor
+    CornersPredictor, HandicapPredictor, ExactScorePredictor, AdvancedPredictor
+)
+from app.core.database import get_session, is_demo_mode
+from app.sports.football.models import Team, League, Fixture
+from app.sports.football.analytics.team_stats import (
+    get_team_corners_avg, get_team_corners_conceded_avg,
+    get_team_possession_avg, get_team_cards_avg, get_team_shots_avg
 )
 
 
+def get_teams_from_db():
+    """Load teams from database."""
+    if is_demo_mode():
+        return []
+    
+    session = next(get_session())
+    try:
+        stmt = select(Team).order_by(Team.name)
+        return session.exec(stmt).all()
+    finally:
+        session.close()
+
+
+def get_leagues_from_db():
+    """Load leagues from database."""
+    if is_demo_mode():
+        return []
+    
+    session = next(get_session())
+    try:
+        stmt = select(League).order_by(League.name)
+        return session.exec(stmt).all()
+    finally:
+        session.close()
+
+
+def get_team_stats_from_db(team_id: int, last_n: int = 10):
+    """Get calculated stats for a team from database."""
+    if is_demo_mode() or not team_id:
+        return None
+    
+    session = next(get_session())
+    try:
+        corners = get_team_corners_avg(team_id, last_n, session)
+        corners_conceded = get_team_corners_conceded_avg(team_id, last_n, session)
+        possession = get_team_possession_avg(team_id, last_n, session)
+        cards = get_team_cards_avg(team_id, last_n, session)
+        shots = get_team_shots_avg(team_id, last_n, session)
+        
+        # Calculate goals from fixtures
+        home_stmt = select(Fixture).where(
+            Fixture.home_team_id == team_id,
+            Fixture.home_score.isnot(None)
+        ).order_by(Fixture.date.desc()).limit(last_n)
+        away_stmt = select(Fixture).where(
+            Fixture.away_team_id == team_id,
+            Fixture.away_score.isnot(None)
+        ).order_by(Fixture.date.desc()).limit(last_n)
+        
+        home_fixtures = session.exec(home_stmt).all()
+        away_fixtures = session.exec(away_stmt).all()
+        
+        goals_scored = sum(f.home_score or 0 for f in home_fixtures) + sum(f.away_score or 0 for f in away_fixtures)
+        goals_conceded = sum(f.away_score or 0 for f in home_fixtures) + sum(f.home_score or 0 for f in away_fixtures)
+        total_matches = len(home_fixtures) + len(away_fixtures)
+        
+        if total_matches == 0:
+            return None
+        
+        return {
+            "goals_scored_avg": goals_scored / total_matches,
+            "goals_conceded_avg": goals_conceded / total_matches,
+            "corners_avg": corners,
+            "corners_conceded_avg": corners_conceded,
+            "possession_avg": possession,
+            "cards_yellow_avg": cards["yellow"],
+            "cards_total_avg": cards["yellow"] + cards["red"],
+            "shots_avg": shots["total"],
+            "shots_on_goal_avg": shots["on_goal"],
+            "matches_analyzed": total_matches
+        }
+    finally:
+        session.close()
+
+
 def show_prediction_view():
-    """Display the prediction dashboard with professional UI."""
+    """Display the prediction dashboard with database integration."""
     
     # Header
     st.markdown(f"""
@@ -20,49 +103,134 @@ def show_prediction_view():
     </div>
     """, unsafe_allow_html=True)
     
+    # Load data from DB
+    teams_db = get_teams_from_db()
+    leagues_db = get_leagues_from_db()
+    
+    # Fallback teams if DB is empty
+    fallback_teams = sorted([
+        "Real Madrid", "Barcelona", "Atletico Madrid", "Sevilla", "Valencia",
+        "Manchester City", "Arsenal", "Liverpool", "Manchester United", "Chelsea",
+        "Bayern Munich", "Dortmund", "PSG", "Inter Milan", "Juventus"
+    ])
+    
+    use_db = len(teams_db) > 0
+    
     # ═══════════════════════════════════════════════════════
     # Match Input
-    with st.expander("⚙️ Configuración del Partido", expanded=True):
-        col1, col2, col3 = st.columns([2, 1, 2])
+    with st.expander("Configuración del Partido", expanded=True):
         
-        # Predefined list of top teams
-        teams = sorted([
-            "Real Madrid", "Barcelona", "Atletico Madrid", "Sevilla", "Valencia",
-            "Manchester City", "Arsenal", "Liverpool", "Manchester United", "Chelsea", "Tottenham",
-            "Bayern Munich", "Dortmund", "Leverkusen", "RB Leipzig",
-            "PSG", "Monaco", "Marseille",
-            "Inter Milan", "AC Milan", "Juventus", "Napoli", "Roma",
-            "Benfica", "Porto", "Sporting CP"
-        ])
+        # Data source indicator
+        if use_db:
+            st.success(f"Datos desde BD: {len(teams_db)} equipos disponibles", icon="✅")
+        else:
+            st.warning("Modo Demo: Ingresa los datos manualmente", icon="⚠️")
+        
+        col1, col2, col3 = st.columns([2, 1, 2])
         
         with col1:
             st.markdown(f"### {render_icon('home')} Local", unsafe_allow_html=True)
-            home_name = st.selectbox("Equipo Local", teams, index=teams.index("Real Madrid"), key="home_name")
-            home_attack = st.slider("Goles marcados/partido (Local)", 0.5, 3.5, 1.8, 0.1, key="home_attack")
-            home_defense = st.slider("Goles recibidos/partido (Local)", 0.5, 2.5, 0.9, 0.1, key="home_defense")
-            home_corners = st.slider("Córners/partido (Local)", 3.0, 10.0, 5.5, 0.5, key="home_corners")
-            home_cards = st.slider("Tarjetas/partido (Local)", 0.5, 5.0, 2.1, 0.1, key="home_cards")
-            home_shots = st.slider("Remates/partido (Local)", 5.0, 20.0, 12.5, 0.5, key="home_shots")
+            
+            if use_db:
+                team_options = [(t.id, t.name) for t in teams_db]
+                home_selection = st.selectbox(
+                    "Equipo Local",
+                    options=team_options,
+                    format_func=lambda x: x[1],
+                    key="home_team_select"
+                )
+                home_id = home_selection[0] if home_selection else None
+                home_name = home_selection[1] if home_selection else "Local"
+                
+                # Get stats from DB
+                home_stats = get_team_stats_from_db(home_id)
+                
+                if home_stats:
+                    st.caption(f"Basado en {home_stats['matches_analyzed']} partidos")
+                    home_attack = st.slider("Goles/partido", 0.5, 3.5, 
+                                           float(home_stats["goals_scored_avg"]), 0.1, key="home_attack")
+                    home_defense = st.slider("Goles recibidos/partido", 0.5, 2.5,
+                                            float(home_stats["goals_conceded_avg"]), 0.1, key="home_defense")
+                    home_corners = st.slider("Córners/partido", 3.0, 10.0,
+                                            float(home_stats["corners_avg"]), 0.5, key="home_corners")
+                    home_cards = st.slider("Tarjetas/partido", 0.5, 5.0,
+                                          float(home_stats["cards_total_avg"]), 0.1, key="home_cards")
+                    home_shots = st.slider("Remates/partido", 5.0, 20.0,
+                                          float(home_stats["shots_avg"]), 0.5, key="home_shots")
+                    home_corners_conceded = home_stats["corners_conceded_avg"]
+                else:
+                    st.info("Sin datos históricos - ajusta manualmente")
+                    home_attack = st.slider("Goles/partido", 0.5, 3.5, 1.5, 0.1, key="home_attack")
+                    home_defense = st.slider("Goles recibidos/partido", 0.5, 2.5, 1.0, 0.1, key="home_defense")
+                    home_corners = st.slider("Córners/partido", 3.0, 10.0, 5.0, 0.5, key="home_corners")
+                    home_cards = st.slider("Tarjetas/partido", 0.5, 5.0, 2.0, 0.1, key="home_cards")
+                    home_shots = st.slider("Remates/partido", 5.0, 20.0, 12.0, 0.5, key="home_shots")
+                    home_corners_conceded = 5.0
+            else:
+                home_name = st.selectbox("Equipo Local", fallback_teams, index=0, key="home_name")
+                home_attack = st.slider("Goles/partido", 0.5, 3.5, 1.8, 0.1, key="home_attack")
+                home_defense = st.slider("Goles recibidos/partido", 0.5, 2.5, 0.9, 0.1, key="home_defense")
+                home_corners = st.slider("Córners/partido", 3.0, 10.0, 5.5, 0.5, key="home_corners")
+                home_cards = st.slider("Tarjetas/partido", 0.5, 5.0, 2.1, 0.1, key="home_cards")
+                home_shots = st.slider("Remates/partido", 5.0, 20.0, 12.5, 0.5, key="home_shots")
+                home_corners_conceded = home_defense * 4
         
         with col2:
             st.markdown("<div style='text-align: center; padding-top: 60px; font-size: 1.5rem; color: var(--text-secondary);'>VS</div>", unsafe_allow_html=True)
         
         with col3:
             st.markdown(f"### {render_icon('flight')} Visitante", unsafe_allow_html=True)
-            away_name = st.selectbox("Equipo Visitante", teams, index=teams.index("Barcelona"), key="away_name")
-            away_attack = st.slider("Goles marcados/partido (Visitante)", 0.5, 3.5, 1.5, 0.1, key="away_attack")
-            away_defense = st.slider("Goles recibidos/partido (Visitante)", 0.5, 2.5, 1.1, 0.1, key="away_defense")
-            away_corners = st.slider("Córners/partido (Visitante)", 3.0, 10.0, 5.0, 0.5, key="away_corners")
-            away_cards = st.slider("Tarjetas/partido (Visitante)", 0.5, 5.0, 2.5, 0.1, key="away_cards")
-            away_shots = st.slider("Remates/partido (Visitante)", 5.0, 20.0, 10.5, 0.5, key="away_shots")
+            
+            if use_db:
+                away_selection = st.selectbox(
+                    "Equipo Visitante",
+                    options=team_options,
+                    format_func=lambda x: x[1],
+                    index=min(1, len(team_options)-1),
+                    key="away_team_select"
+                )
+                away_id = away_selection[0] if away_selection else None
+                away_name = away_selection[1] if away_selection else "Visitante"
+                
+                away_stats = get_team_stats_from_db(away_id)
+                
+                if away_stats:
+                    st.caption(f"Basado en {away_stats['matches_analyzed']} partidos")
+                    away_attack = st.slider("Goles/partido", 0.5, 3.5,
+                                           float(away_stats["goals_scored_avg"]), 0.1, key="away_attack")
+                    away_defense = st.slider("Goles recibidos/partido", 0.5, 2.5,
+                                            float(away_stats["goals_conceded_avg"]), 0.1, key="away_defense")
+                    away_corners = st.slider("Córners/partido", 3.0, 10.0,
+                                            float(away_stats["corners_avg"]), 0.5, key="away_corners")
+                    away_cards = st.slider("Tarjetas/partido", 0.5, 5.0,
+                                          float(away_stats["cards_total_avg"]), 0.1, key="away_cards")
+                    away_shots = st.slider("Remates/partido", 5.0, 20.0,
+                                          float(away_stats["shots_avg"]), 0.5, key="away_shots")
+                    away_corners_conceded = away_stats["corners_conceded_avg"]
+                else:
+                    st.info("Sin datos históricos - ajusta manualmente")
+                    away_attack = st.slider("Goles/partido", 0.5, 3.5, 1.3, 0.1, key="away_attack")
+                    away_defense = st.slider("Goles recibidos/partido", 0.5, 2.5, 1.2, 0.1, key="away_defense")
+                    away_corners = st.slider("Córners/partido", 3.0, 10.0, 4.5, 0.5, key="away_corners")
+                    away_cards = st.slider("Tarjetas/partido", 0.5, 5.0, 2.3, 0.1, key="away_cards")
+                    away_shots = st.slider("Remates/partido", 5.0, 20.0, 10.0, 0.5, key="away_shots")
+                    away_corners_conceded = 5.0
+            else:
+                away_name = st.selectbox("Equipo Visitante", fallback_teams, index=1, key="away_name")
+                away_attack = st.slider("Goles/partido", 0.5, 3.5, 1.5, 0.1, key="away_attack")
+                away_defense = st.slider("Goles recibidos/partido", 0.5, 2.5, 1.1, 0.1, key="away_defense")
+                away_corners = st.slider("Córners/partido", 3.0, 10.0, 5.0, 0.5, key="away_corners")
+                away_cards = st.slider("Tarjetas/partido", 0.5, 5.0, 2.5, 0.1, key="away_cards")
+                away_shots = st.slider("Remates/partido", 5.0, 20.0, 10.5, 0.5, key="away_shots")
+                away_corners_conceded = away_defense * 4
     
     # ═══════════════════════════════════════════════════════
     # CALCULATE PREDICTIONS
     # ═══════════════════════════════════════════════════════
     poisson = PoissonModel(league_avg_home_goals=1.5, league_avg_away_goals=1.2)
     
-    # Calculate xG
-    home_xg = home_attack * (away_defense / 1.0) * 1.1  # Home advantage
+    # Calculate xG with home advantage
+    home_xg = home_attack * (away_defense / 1.0) * 1.1
     away_xg = away_attack * (home_defense / 1.0) * 0.9
     
     # Get predictions
@@ -70,25 +238,22 @@ def show_prediction_view():
     goals_predictor = GoalsPredictor(poisson)
     goals_pred = goals_predictor.predict(home_xg, away_xg)
     
-    from app.sports.football.predictions import AdvancedPredictor
     adv_predictor = AdvancedPredictor(poisson)
     
-    # Corners
+    # Corners - use actual conceded averages if available
     corners_pred = adv_predictor.predict_corners(
         home_corner_avg=home_corners,
         away_corner_avg=away_corners,
-        home_corner_conceded_avg=home_defense * 4, # Fallback estimate
-        away_corner_conceded_avg=away_defense * 4
+        home_corner_conceded_avg=home_corners_conceded if 'home_corners_conceded' in dir() else home_defense * 4,
+        away_corner_conceded_avg=away_corners_conceded if 'away_corners_conceded' in dir() else away_defense * 4
     )
     
-    # Cards
     cards_pred = adv_predictor.predict_cards(
         home_card_avg=home_cards,
         away_card_avg=away_cards,
-        ref_card_avg=4.5 # Standard average
+        ref_card_avg=4.5
     )
     
-    # Shots
     shots_pred = adv_predictor.predict_shots(
         home_shots_avg=home_shots,
         away_shots_avg=away_shots,
@@ -104,15 +269,27 @@ def show_prediction_view():
     st.markdown("---")
     
     # ═══════════════════════════════════════════════════════
-    # MAIN PREDICTION DISPLAY
+    # DISPLAY PREDICTIONS (same as before)
     # ═══════════════════════════════════════════════════════
+    _display_predictions(
+        home_name, away_name, home_xg, away_xg,
+        match_result, goals_pred, corners_pred, cards_pred, shots_pred,
+        handicap_pred, exact_pred
+    )
+
+
+def _display_predictions(home_name, away_name, home_xg, away_xg, 
+                         match_result, goals_pred, corners_pred, cards_pred, 
+                         shots_pred, handicap_pred, exact_pred):
+    """Display all prediction results."""
+    import pandas as pd
     
+    # xG Display
     col_xg_title, _ = st.columns([2, 1])
     with col_xg_title:
         st.markdown(f"### {render_icon('assessment')} Goles Esperados (xG)", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         st.markdown(render_metric_card(f"{home_xg:.2f}", home_name, "accent"), unsafe_allow_html=True)
     with col2:
@@ -144,187 +321,84 @@ def show_prediction_view():
     
     st.markdown("---")
     
-    # ═══════════════════════════════════════════════════════
-    # MARKET TABS
-    # ═══════════════════════════════════════════════════════
-    # Using Material Icons syntax for Streamlit tabs
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    # Market Tabs
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         ":material/sports_soccer: Goles", 
         ":material/trending_up: Hándicap", 
         ":material/scoreboard: Marcador", 
         ":material/flag: Córners", 
         ":material/style: Tarjetas",
-        ":material/ads_click: Remates",
-        ":material/summarize: Resumen"
+        ":material/ads_click: Remates"
     ])
     
     # TAB 1: GOALS
     with tab1:
-        import pandas as pd
-        
         col1, col2 = st.columns([3, 2])
         
         with col1:
-            st.markdown(f"#### {render_icon('sports_soccer')} Probabilidades de Goles (Over/Under)", unsafe_allow_html=True)
-            st.caption("Predicción basada en la distribución de Poisson de ambos equipos.")
-            
-            # Prepare data for DataFrame
+            st.markdown(f"#### {render_icon('sports_soccer')} Over/Under Goles", unsafe_allow_html=True)
             data = []
             for line, probs in goals_pred.over_under.items():
-                row = {
+                data.append({
                     "Línea": f"{line} Goles",
-                    "Más (%)": probs["over"],
-                    "Más (Cuota)": round(1/probs["over"], 2) if probs["over"] > 0 else 0,
-                    "Menos (%)": probs["under"],
-                    "Menos (Cuota)": round(1/probs["under"], 2) if probs["under"] > 0 else 0,
-                }
-                data.append(row)
-            
-            df_goals = pd.DataFrame(data)
+                    "Over (%)": probs["over"],
+                    "Cuota Over": round(1/probs["over"], 2) if probs["over"] > 0 else 0,
+                    "Under (%)": probs["under"],
+                    "Cuota Under": round(1/probs["under"], 2) if probs["under"] > 0 else 0,
+                })
             
             st.dataframe(
-                df_goals,
+                pd.DataFrame(data),
                 column_config={
-                    "Línea": st.column_config.TextColumn(
-                        "Línea",
-                        help="Umbral de goles totales en el partido (suma de ambos equipos)",
-                        width="medium"
-                    ),
-                    "Más (%)": st.column_config.ProgressColumn(
-                        "Más (Over)",
-                        help="Probabilidad de que haya MÁS goles que la línea indicada",
-                        format="%.1f%%",
-                        min_value=0,
-                        max_value=1,
-                    ),
-                    "Más (Cuota)": st.column_config.NumberColumn(
-                        "Cuota Over",
-                        format="%.2f",
-                        help="Cuota decimal estimada para el mercado Over"
-                    ),
-                    "Menos (%)": st.column_config.ProgressColumn(
-                        "Menos (Under)",
-                        help="Probabilidad de que haya MENOS goles que la línea indicada",
-                        format="%.1f%%",
-                        min_value=0,
-                        max_value=1,
-                    ),
-                    "Menos (Cuota)": st.column_config.NumberColumn(
-                        "Cuota Under",
-                        format="%.2f",
-                        help="Cuota decimal estimada para el mercado Under"
-                    ),
+                    "Over (%)": st.column_config.ProgressColumn("Over", format="%.1f%%", min_value=0, max_value=1),
+                    "Under (%)": st.column_config.ProgressColumn("Under", format="%.1f%%", min_value=0, max_value=1),
                 },
-                hide_index=True,
-                use_container_width=True
+                hide_index=True, use_container_width=True
             )
         
         with col2:
-            st.markdown(f"#### {render_icon('compare_arrows')} Ambos Marcan (BTTS)", unsafe_allow_html=True)
-            st.info("BTTS (Both Teams To Score): Probabilidad de que ambos equipos anoten al menos un gol.", icon="ℹ️")
-            
+            st.markdown(f"#### BTTS (Ambos Marcan)", unsafe_allow_html=True)
             btts_yes = goals_pred.btts["yes"]
             btts_no = goals_pred.btts["no"]
-            
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 st.metric("Sí", f"{btts_yes*100:.1f}%", f"@ {round(1/btts_yes, 2)}")
             with col_b2:
                 st.metric("No", f"{btts_no*100:.1f}%", f"@ {round(1/btts_no, 2)}")
-            
-            st.markdown("---")
-            st.markdown("#### Par / Impar")
-            st.caption("Predicción sobre si la suma total de goles será par o impar.")
-            
-            # Simple chart for Odd/Even
-            odd_even_df = pd.DataFrame({
-                "Resultado": ["Par", "Impar"],
-                "Probabilidad": [goals_pred.odd_even['even'], goals_pred.odd_even['odd']]
-            })
-            st.dataframe(
-                odd_even_df,
-                column_config={
-                    "Probabilidad": st.column_config.ProgressColumn(
-                        "Prob (%)",
-                        format="%.1f%%",
-                        min_value=0,
-                        max_value=1,
-                    )
-                },
-                hide_index=True,
-                use_container_width=True
-            )
     
     # TAB 2: HANDICAP
     with tab2:
         st.markdown(f"### {render_icon('trending_up')} Hándicap Asiático", unsafe_allow_html=True)
-        st.info("El hándicap asiático añade o resta goles virtuales al resultado final para equilibrar el partido.", icon="ℹ️")
-        
         col1, col2 = st.columns(2)
         
-        # Prepare Data
         ah_data_home = []
         ah_data_away = []
-        
         for line, probs in handicap_pred.asian_handicaps.items():
             win_prob = probs.get('win', 0)
-            void_prob = probs.get('void', 0)
-            # Create row
             row = {
                 "Línea": line.replace('home_', '').replace('away_', ''),
                 "Probabilidad": win_prob,
-                "Cuota": round(1/win_prob, 2) if win_prob > 0 else 0,
-                "Void": void_prob
+                "Cuota": round(1/win_prob, 2) if win_prob > 0 else 0
             }
-            
             if "home" in line:
                 ah_data_home.append(row)
             elif "away" in line:
                 ah_data_away.append(row)
         
-        # Display Tables
         with col1:
-            st.markdown(f"**Favoritismo Local ({home_name})**")
-            st.dataframe(
-                pd.DataFrame(ah_data_home).sort_values("Línea"),
-                column_config={
-                    "Línea": st.column_config.TextColumn("Línea (+/-)", help="Goles sumados/restados al local"),
-                    "Probabilidad": st.column_config.ProgressColumn(
-                        "Ganar (%)", 
-                        format="%.1f%%", 
-                        min_value=0, max_value=1,
-                        help="Probabilidad de ganar la apuesta"
-                    ),
-                    "Cuota": st.column_config.NumberColumn("Cuota Est.", format="%.2f"),
-                    "Void": st.column_config.NumberColumn("Void (%)", format="%.0f%%", help="Probabilidad de devolución (empate tras hándicap)")
-                },
-                hide_index=True,
-                use_container_width=True
-            )
-        
+            st.markdown(f"**{home_name}**")
+            st.dataframe(pd.DataFrame(ah_data_home).sort_values("Línea"), 
+                        column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
+                        hide_index=True, use_container_width=True)
         with col2:
-            st.markdown(f"**Favoritismo Visitante ({away_name})**")
-            st.dataframe(
-                pd.DataFrame(ah_data_away).sort_values("Línea"),
-                column_config={
-                    "Línea": st.column_config.TextColumn("Línea (+/-)", help="Goles sumados/restados al visitante"),
-                    "Probabilidad": st.column_config.ProgressColumn(
-                        "Ganar (%)", 
-                        format="%.1f%%", 
-                        min_value=0, max_value=1,
-                        help="Probabilidad de ganar la apuesta"
-                    ),
-                    "Cuota": st.column_config.NumberColumn("Cuota Est.", format="%.2f"),
-                    "Void": st.column_config.NumberColumn("Void (%)", format="%.0f%%", help="Probabilidad de devolución")
-                },
-                hide_index=True,
-                use_container_width=True
-            )
+            st.markdown(f"**{away_name}**")
+            st.dataframe(pd.DataFrame(ah_data_away).sort_values("Línea"),
+                        column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
+                        hide_index=True, use_container_width=True)
     
     # TAB 3: EXACT SCORE
     with tab3:
-        st.markdown(f"#### {render_icon('scoreboard')} Top Marcadores Probables", unsafe_allow_html=True)
-        
+        st.markdown(f"#### {render_icon('scoreboard')} Top 5 Marcadores Probables", unsafe_allow_html=True)
         cols = st.columns(5)
         for i, (score, prob) in enumerate(exact_pred.top_scorelines[:5]):
             with cols[i]:
@@ -334,124 +408,63 @@ def show_prediction_view():
                             padding: 12px; border-radius: 8px; text-align: center;">
                     <div style="font-size: 1.4rem; font-weight: 700; color: var(--accent);">{score}</div>
                     <div style="font-size: 0.9rem;">{prob*100:.1f}%</div>
-                    <div style="font-size: 0.75rem; opacity: 0.8;">Cuota: {odds}</div>
+                    <div style="font-size: 0.75rem; opacity: 0.8;">@ {odds}</div>
                 </div>
                 """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f"#### {render_icon('difference')} Margen de Victoria", unsafe_allow_html=True)
-        margins = exact_pred.victory_margin
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.progress(margins['home_1'], text=f"{home_name} por 1 gol ({margins['home_1']*100:.1f}%)")
-            st.progress(margins['home_2'], text=f"{home_name} por 2 goles ({margins['home_2']*100:.1f}%)")
-        with col2:
-            st.progress(margins['draw_0-0'], text=f"Empate 0-0 ({margins['draw_0-0']*100:.1f}%)")
-            st.progress(margins['draw_with_goals'], text=f"Empate con goles ({margins['draw_with_goals']*100:.1f}%)")
-        with col3:
-            st.progress(margins['away_1'], text=f"{away_name} por 1 gol ({margins['away_1']*100:.1f}%)")
-            st.progress(margins['away_2'], text=f"{away_name} por 2 goles ({margins['away_2']*100:.1f}%)")
     
     # TAB 4: CORNERS
     with tab4:
         col1, col2 = st.columns([3, 2])
         with col1:
-            st.markdown(f"#### {render_icon('flag')} Probabilidades de Córners (Over)", unsafe_allow_html=True)
+            st.markdown(f"#### {render_icon('flag')} Over/Under Córners", unsafe_allow_html=True)
             corners_data = []
             for line, probs in corners_pred.over_under.items():
                 corners_data.append({
-                    "Línea": f"+ {line} Córners",
+                    "Línea": f"+ {line}",
                     "Probabilidad": probs["over"],
-                    "Cuota Justa": round(1/probs["over"], 2) if probs["over"] > 0 else 0
+                    "Cuota": round(1/probs["over"], 2) if probs["over"] > 0 else 0
                 })
-            
-            st.dataframe(
-                pd.DataFrame(corners_data),
-                column_config={
-                    "Línea": st.column_config.TextColumn("Mercado", width="medium"),
-                    "Probabilidad": st.column_config.ProgressColumn("Prob (%)", format="%.1f%%", min_value=0, max_value=1),
-                    "Cuota Justa": st.column_config.NumberColumn("Cuota Justa", format="%.2f")
-                },
-                hide_index=True, use_container_width=True
-            )
+            st.dataframe(pd.DataFrame(corners_data),
+                        column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
+                        hide_index=True, use_container_width=True)
         
         with col2:
-            st.markdown("#### Quién tendrá más córners")
-            st.caption("Predicción basada en Poisson de promedios históricos.")
-            most = corners_pred.most_corners
-            st.markdown(f"""
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                {render_metric_card(f"{most['home_win']*100:.1f}%", home_name, "accent")}
-                {render_metric_card(f"{most['draw']*100:.1f}%", "Igual Cantidad", "warning")}
-                {render_metric_card(f"{most['away_win']*100:.1f}%", away_name, "danger")}
-            </div>
-            """, unsafe_allow_html=True)
-            
+            st.markdown("#### Córners Esperados")
+            st.metric(home_name, f"{corners_pred.home_expected:.1f}")
+            st.metric(away_name, f"{corners_pred.away_expected:.1f}")
+            st.metric("Total", f"{corners_pred.total_expected:.1f}")
+    
     # TAB 5: CARDS
     with tab5:
         col1, col2 = st.columns([3, 2])
         with col1:
-            st.markdown(f"#### {render_icon('style')} Probabilidades de Tarjetas (Over)", unsafe_allow_html=True)
+            st.markdown(f"#### {render_icon('style')} Over/Under Tarjetas", unsafe_allow_html=True)
             cards_data = []
             for line, probs in cards_pred.over_under.items():
                 cards_data.append({
-                    "Línea": f"+ {line} Tarjetas",
+                    "Línea": f"+ {line}",
                     "Probabilidad": probs["over"],
-                    "Cuota Justa": round(1/probs["over"], 2) if probs["over"] > 0 else 0
+                    "Cuota": round(1/probs["over"], 2) if probs["over"] > 0 else 0
                 })
-            st.dataframe(pd.DataFrame(cards_data), column_config={
-                "Línea": st.column_config.TextColumn("Mercado"),
-                "Probabilidad": st.column_config.ProgressColumn("Prob (%)", format="%.1f%%", min_value=0, max_value=1),
-                "Cuota Justa": st.column_config.NumberColumn("Cuota Justa", format="%.2f")
-            }, hide_index=True, use_container_width=True)
-            
+            st.dataframe(pd.DataFrame(cards_data),
+                        column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
+                        hide_index=True, use_container_width=True)
+        
         with col2:
-            st.markdown("#### Agresividad Esperada")
-            st.markdown(render_metric_card(f"{cards_pred.total_expected:.1f}", "Tarjetas Totales", "warning"), unsafe_allow_html=True)
-            st.markdown(f"**Local ({home_name}):** {cards_pred.home_expected:.1f}")
-            st.markdown(f"**Visitante ({away_name}):** {cards_pred.away_expected:.1f}")
-            st.info("Modelo ajustado por promedios de equipos y tendencia del árbitro (est. 4.5 tarjetas/partido).")
-
+            st.markdown("#### Tarjetas Esperadas")
+            st.metric("Total", f"{cards_pred.total_expected:.1f}")
+            st.metric(home_name, f"{cards_pred.home_expected:.1f}")
+            st.metric(away_name, f"{cards_pred.away_expected:.1f}")
+    
     # TAB 6: SHOTS
     with tab6:
-        st.markdown(f"#### {render_icon('ads_click')} Remates y Puntería", unsafe_allow_html=True)
+        st.markdown(f"#### {render_icon('ads_click')} Remates Esperados", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"**{home_name}**")
-            st.markdown(render_metric_card(f"{shots_pred.home_shots_expected:.1f}", "Remates Totales", "accent"), unsafe_allow_html=True)
-            st.markdown(f"**Remates a Puerta:** {shots_pred.home_on_goal_expected:.1f}")
+            st.metric("Remates Totales", f"{shots_pred.home_shots_expected:.1f}")
+            st.metric("A Puerta", f"{shots_pred.home_on_goal_expected:.1f}")
         with col2:
             st.markdown(f"**{away_name}**")
-            st.markdown(render_metric_card(f"{shots_pred.away_shots_expected:.1f}", "Remates Totales", "danger"), unsafe_allow_html=True)
-            st.markdown(f"**Remates a Puerta:** {shots_pred.away_on_goal_expected:.1f}")
-        st.caption("Predicción basada en volumen ofensivo histórico de los últimos 10 partidos.")
-
-    # TAB 7: SUMMARY
-    with tab7:
-        st.markdown(f"### {render_icon('summarize')} Resumen Estratégico", unsafe_allow_html=True)
-        summary_data = {
-            "Mercado": [
-                "Victoria Local", "Empate", "Victoria Visitante",
-                "Over 2.5 Goles", "Over 9.5 Córners", "Over 3.5 Tarjetas",
-                "BTTS Sí"
-            ],
-            "Probabilidad (%)": [
-                f"{match_result['home_win']*100:.1f}%",
-                f"{match_result['draw']*100:.1f}%",
-                f"{match_result['away_win']*100:.1f}%",
-                f"{goals_pred.over_under['2.5']['over']*100:.1f}%",
-                f"{corners_pred.over_under['9.5']['over']*100:.1f}%",
-                f"{cards_pred.over_under['3.5']['over']*100:.1f}%",
-                f"{goals_pred.btts['yes']*100:.1f}%"
-            ],
-            "Cuota Justa": [
-                round(1/match_result['home_win'], 2),
-                round(1/match_result['draw'], 2),
-                round(1/match_result['away_win'], 2),
-                round(1/goals_pred.over_under['2.5']['over'], 2),
-                round(1/corners_pred.over_under['9.5']['over'], 2),
-                round(1/cards_pred.over_under['3.5']['over'], 2),
-                round(1/goals_pred.btts['yes'], 2)
-            ]
-        }
-        st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)
+            st.metric("Remates Totales", f"{shots_pred.away_shots_expected:.1f}")
+            st.metric("A Puerta", f"{shots_pred.away_on_goal_expected:.1f}")
