@@ -1,6 +1,7 @@
 """
 Football ETL - Extract, Transform, Load for football data.
 """
+import logging
 from typing import Any, Dict
 from sqlmodel import Session
 from app.core.interfaces import ISportETL
@@ -9,6 +10,10 @@ from app.sports.football.api_client import FootballAPIClient
 from app.sports.football.models import (
     League, Team, Player, Coach, Fixture, TeamMatchStats, PlayerMatchStats
 )
+
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 
 class FootballETL(ISportETL):
@@ -21,14 +26,19 @@ class FootballETL(ISportETL):
         """
         Sync all data for a football league/season.
         """
+        logger.info(f"Starting sync for league {league_id}, season {season}")
         fixtures_data = self.api_client.get_events(league_id, season)
         
         session = next(get_session())
         try:
+            count = 0
             for fixture_data in fixtures_data:
                 self._process_fixture(fixture_data, session)
+                count += 1
             session.commit()
+            logger.info(f"Successfully synced {count} fixtures for league {league_id}")
         except Exception as e:
+            logger.error(f"Error syncing league {league_id}: {str(e)}")
             session.rollback()
             raise e
         finally:
@@ -38,6 +48,7 @@ class FootballETL(ISportETL):
         """
         Sync detailed stats and lineups for a specific fixture.
         """
+        logger.info(f"Starting detailed sync for fixture {event_id}")
         stats_data = self.api_client.get_event_stats(event_id)
         lineups_data = self.api_client.get_event_lineups(event_id)
         
@@ -46,7 +57,9 @@ class FootballETL(ISportETL):
             self._process_stats(event_id, stats_data, session)
             self._process_lineups(event_id, lineups_data, session)
             session.commit()
+            logger.info(f"Successfully synced details for fixture {event_id}")
         except Exception as e:
+            logger.error(f"Error syncing details for fixture {event_id}: {str(e)}")
             session.rollback()
             raise e
         finally:

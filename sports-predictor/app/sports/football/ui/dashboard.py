@@ -3,6 +3,9 @@ Football Dashboard - Modern UI for Data Management.
 """
 import streamlit as st
 from app.ui.theme import render_metric_card, render_icon
+from app.core.database import get_session
+from app.sports.football.models import Fixture, Team, Player, League
+from sqlmodel import select, func
 
 
 def show_dashboard():
@@ -19,16 +22,28 @@ def show_dashboard():
     # Stats Overview
     st.markdown(f"### {render_icon('database')} Estadísticas de la Base de Datos", unsafe_allow_html=True)
     
+    # Fetch real counts
+    session = next(get_session())
+    try:
+        fixtures_count = session.exec(select(func.count(Fixture.id))).one()
+        teams_count = session.exec(select(func.count(Team.id))).one()
+        players_count = session.exec(select(func.count(Player.id))).one()
+        leagues_count = session.exec(select(func.count(League.id))).one()
+    except Exception:
+        fixtures_count = teams_count = players_count = leagues_count = 0
+    finally:
+        session.close()
+
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown(render_metric_card("0", "Partidos", "accent"), unsafe_allow_html=True)
+        st.markdown(render_metric_card(str(fixtures_count), "Partidos", "accent"), unsafe_allow_html=True)
     with col2:
-        st.markdown(render_metric_card("0", "Equipos", "success"), unsafe_allow_html=True)
+        st.markdown(render_metric_card(str(teams_count), "Equipos", "success"), unsafe_allow_html=True)
     with col3:
-        st.markdown(render_metric_card("0", "Jugadores", "warning"), unsafe_allow_html=True)
+        st.markdown(render_metric_card(str(players_count), "Jugadores", "warning"), unsafe_allow_html=True)
     with col4:
-        st.markdown(render_metric_card("0", "Ligas", "danger"), unsafe_allow_html=True)
+        st.markdown(render_metric_card(str(leagues_count), "Ligas", "danger"), unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -76,6 +91,7 @@ def show_dashboard():
                     etl = FootballETL()
                     etl.sync_league_data(league_id=league_id[0], season=season)
                     st.success("✅ ¡Datos sincronizados correctamente!")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error durante la sincronización: {e}")
     
