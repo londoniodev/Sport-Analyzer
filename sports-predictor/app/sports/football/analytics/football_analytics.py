@@ -6,10 +6,12 @@ from sqlmodel import Session
 from app.core.interfaces import ISportAnalytics
 from app.sports.football.analytics.team_stats import (
     get_team_corners_avg,
+    get_team_corners_conceded_avg,
     get_team_possession_avg,
-    get_team_cards_avg
+    get_team_cards_avg,
+    get_team_shots_avg
 )
-from app.sports.football.analytics.impact_engine import get_team_corners_with_player
+from app.sports.football.analytics.impact_engine import get_player_impact_score
 from app.sports.football.models import Fixture
 
 
@@ -28,16 +30,8 @@ class FootballAnalytics(ISportAnalytics):
         away_team_id = fixture.away_team_id
         
         return {
-            "home_team": {
-                "corners_avg": get_team_corners_avg(home_team_id, 10, session),
-                "possession_avg": get_team_possession_avg(home_team_id, 10, session),
-                "cards_avg": get_team_cards_avg(home_team_id, 10, session),
-            },
-            "away_team": {
-                "corners_avg": get_team_corners_avg(away_team_id, 10, session),
-                "possession_avg": get_team_possession_avg(away_team_id, 10, session),
-                "cards_avg": get_team_cards_avg(away_team_id, 10, session),
-            }
+            "home_team": self.get_competitor_stats(home_team_id, 10, session),
+            "away_team": self.get_competitor_stats(away_team_id, 10, session)
         }
     
     def get_competitor_stats(
@@ -49,19 +43,26 @@ class FootballAnalytics(ISportAnalytics):
         """
         Get aggregated stats for a football team.
         """
+        shots = get_team_shots_avg(competitor_id, last_n_events, session)
+        cards = get_team_cards_avg(competitor_id, last_n_events, session)
+        
         return {
             "corners_avg": get_team_corners_avg(competitor_id, last_n_events, session),
+            "corners_conceded_avg": get_team_corners_conceded_avg(competitor_id, last_n_events, session),
             "possession_avg": get_team_possession_avg(competitor_id, last_n_events, session),
-            "cards_avg": get_team_cards_avg(competitor_id, last_n_events, session),
+            "cards_yellow_avg": cards["yellow"],
+            "cards_red_avg": cards["red"],
+            "shots_total_avg": shots["total"],
+            "shots_on_goal_avg": shots["on_goal"]
         }
     
-    def get_player_impact_on_corners(
+    def get_player_impact(
         self, 
         team_id: int, 
         player_id: int, 
         session: Session
-    ) -> float:
+    ) -> Dict[str, Any]:
         """
-        Football-specific: Get player impact on team corners.
+        Get comprehensive player impact scores.
         """
-        return get_team_corners_with_player(team_id, player_id, session)
+        return get_player_impact_score(player_id, team_id, session)

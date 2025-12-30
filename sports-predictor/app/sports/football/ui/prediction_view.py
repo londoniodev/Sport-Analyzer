@@ -41,6 +41,8 @@ def show_prediction_view():
             home_attack = st.slider("Goles marcados/partido (Local)", 0.5, 3.5, 1.8, 0.1, key="home_attack")
             home_defense = st.slider("Goles recibidos/partido (Local)", 0.5, 2.5, 0.9, 0.1, key="home_defense")
             home_corners = st.slider("Córners/partido (Local)", 3.0, 10.0, 5.5, 0.5, key="home_corners")
+            home_cards = st.slider("Tarjetas/partido (Local)", 0.5, 5.0, 2.1, 0.1, key="home_cards")
+            home_shots = st.slider("Remates/partido (Local)", 5.0, 20.0, 12.5, 0.5, key="home_shots")
         
         with col2:
             st.markdown("<div style='text-align: center; padding-top: 60px; font-size: 1.5rem; color: var(--text-secondary);'>VS</div>", unsafe_allow_html=True)
@@ -51,6 +53,8 @@ def show_prediction_view():
             away_attack = st.slider("Goles marcados/partido (Visitante)", 0.5, 3.5, 1.5, 0.1, key="away_attack")
             away_defense = st.slider("Goles recibidos/partido (Visitante)", 0.5, 2.5, 1.1, 0.1, key="away_defense")
             away_corners = st.slider("Córners/partido (Visitante)", 3.0, 10.0, 5.0, 0.5, key="away_corners")
+            away_cards = st.slider("Tarjetas/partido (Visitante)", 0.5, 5.0, 2.5, 0.1, key="away_cards")
+            away_shots = st.slider("Remates/partido (Visitante)", 5.0, 20.0, 10.5, 0.5, key="away_shots")
     
     # ═══════════════════════════════════════════════════════
     # CALCULATE PREDICTIONS
@@ -65,8 +69,33 @@ def show_prediction_view():
     match_result = poisson.prob_match_result(home_xg, away_xg)
     goals_predictor = GoalsPredictor(poisson)
     goals_pred = goals_predictor.predict(home_xg, away_xg)
-    corners_predictor = CornersPredictor()
-    corners_pred = corners_predictor.predict(home_corners, away_corners)
+    
+    from app.sports.football.predictions import AdvancedPredictor
+    adv_predictor = AdvancedPredictor(poisson)
+    
+    # Corners
+    corners_pred = adv_predictor.predict_corners(
+        home_corner_avg=home_corners,
+        away_corner_avg=away_corners,
+        home_corner_conceded_avg=home_defense * 4, # Fallback estimate
+        away_corner_conceded_avg=away_defense * 4
+    )
+    
+    # Cards
+    cards_pred = adv_predictor.predict_cards(
+        home_card_avg=home_cards,
+        away_card_avg=away_cards,
+        ref_card_avg=4.5 # Standard average
+    )
+    
+    # Shots
+    shots_pred = adv_predictor.predict_shots(
+        home_shots_avg=home_shots,
+        away_shots_avg=away_shots,
+        home_on_goal_avg=home_shots * 0.35,
+        away_on_goal_avg=away_shots * 0.35
+    )
+    
     handicap_predictor = HandicapPredictor(poisson)
     handicap_pred = handicap_predictor.predict(home_xg, away_xg)
     exact_predictor = ExactScorePredictor(poisson)
@@ -119,11 +148,13 @@ def show_prediction_view():
     # MARKET TABS
     # ═══════════════════════════════════════════════════════
     # Using Material Icons syntax for Streamlit tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         ":material/sports_soccer: Goles", 
         ":material/trending_up: Hándicap", 
         ":material/scoreboard: Marcador", 
         ":material/flag: Córners", 
+        ":material/style: Tarjetas",
+        ":material/ads_click: Remates",
         ":material/summarize: Resumen"
     ])
     
@@ -324,78 +355,103 @@ def show_prediction_view():
     # TAB 4: CORNERS
     with tab4:
         col1, col2 = st.columns([3, 2])
-        
         with col1:
             st.markdown(f"#### {render_icon('flag')} Probabilidades de Córners (Over)", unsafe_allow_html=True)
-            
-            # Data for corners
             corners_data = []
-            for line, probs in list(corners_pred.over_under.items()):
+            for line, probs in corners_pred.over_under.items():
                 corners_data.append({
                     "Línea": f"+ {line} Córners",
                     "Probabilidad": probs["over"],
-                    "Cuota": round(1/probs["over"], 2) if probs["over"] > 0 else 0
+                    "Cuota Justa": round(1/probs["over"], 2) if probs["over"] > 0 else 0
                 })
             
             st.dataframe(
                 pd.DataFrame(corners_data),
                 column_config={
                     "Línea": st.column_config.TextColumn("Mercado", width="medium"),
-                    "Probabilidad": st.column_config.ProgressColumn(
-                        "Probabilidad",
-                        format="%.1f%%",
-                        min_value=0, max_value=1
-                    ),
-                    "Cuota": st.column_config.NumberColumn("Cuota Est.", format="%.2f")
+                    "Probabilidad": st.column_config.ProgressColumn("Prob (%)", format="%.1f%%", min_value=0, max_value=1),
+                    "Cuota Justa": st.column_config.NumberColumn("Cuota Justa", format="%.2f")
                 },
-                hide_index=True,
-                use_container_width=True
+                hide_index=True, use_container_width=True
             )
         
         with col2:
             st.markdown("#### Quién tendrá más córners")
-            st.caption("Predicción basada en promedios históricos de córners a favor.")
-            
-            more = corners_pred.more_corners_1x2
-            
-            # Custom metric display
+            st.caption("Predicción basada en Poisson de promedios históricos.")
+            most = corners_pred.most_corners
             st.markdown(f"""
             <div style="display: flex; flex-direction: column; gap: 10px;">
-                {render_metric_card(f"{more['home']*100:.1f}%", home_name, "accent")}
-                {render_metric_card(f"{more['draw']*100:.1f}%", "Igual Cantidad", "warning")}
-                {render_metric_card(f"{more['away']*100:.1f}%", away_name, "danger")}
+                {render_metric_card(f"{most['home_win']*100:.1f}%", home_name, "accent")}
+                {render_metric_card(f"{most['draw']*100:.1f}%", "Igual Cantidad", "warning")}
+                {render_metric_card(f"{most['away_win']*100:.1f}%", away_name, "danger")}
             </div>
             """, unsafe_allow_html=True)
-    
-    # TAB 5: SUMMARY
+            
+    # TAB 5: CARDS
     with tab5:
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            st.markdown(f"#### {render_icon('style')} Probabilidades de Tarjetas (Over)", unsafe_allow_html=True)
+            cards_data = []
+            for line, probs in cards_pred.over_under.items():
+                cards_data.append({
+                    "Línea": f"+ {line} Tarjetas",
+                    "Probabilidad": probs["over"],
+                    "Cuota Justa": round(1/probs["over"], 2) if probs["over"] > 0 else 0
+                })
+            st.dataframe(pd.DataFrame(cards_data), column_config={
+                "Línea": st.column_config.TextColumn("Mercado"),
+                "Probabilidad": st.column_config.ProgressColumn("Prob (%)", format="%.1f%%", min_value=0, max_value=1),
+                "Cuota Justa": st.column_config.NumberColumn("Cuota Justa", format="%.2f")
+            }, hide_index=True, use_container_width=True)
+            
+        with col2:
+            st.markdown("#### Agresividad Esperada")
+            st.markdown(render_metric_card(f"{cards_pred.total_expected:.1f}", "Tarjetas Totales", "warning"), unsafe_allow_html=True)
+            st.markdown(f"**Local ({home_name}):** {cards_pred.home_expected:.1f}")
+            st.markdown(f"**Visitante ({away_name}):** {cards_pred.away_expected:.1f}")
+            st.info("Modelo ajustado por promedios de equipos y tendencia del árbitro (est. 4.5 tarjetas/partido).")
+
+    # TAB 6: SHOTS
+    with tab6:
+        st.markdown(f"#### {render_icon('ads_click')} Remates y Puntería", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**{home_name}**")
+            st.markdown(render_metric_card(f"{shots_pred.home_shots_expected:.1f}", "Remates Totales", "accent"), unsafe_allow_html=True)
+            st.markdown(f"**Remates a Puerta:** {shots_pred.home_on_goal_expected:.1f}")
+        with col2:
+            st.markdown(f"**{away_name}**")
+            st.markdown(render_metric_card(f"{shots_pred.away_shots_expected:.1f}", "Remates Totales", "danger"), unsafe_allow_html=True)
+            st.markdown(f"**Remates a Puerta:** {shots_pred.away_on_goal_expected:.1f}")
+        st.caption("Predicción basada en volumen ofensivo histórico de los últimos 10 partidos.")
+
+    # TAB 7: SUMMARY
+    with tab7:
         st.markdown(f"### {render_icon('summarize')} Resumen Estratégico", unsafe_allow_html=True)
-        
-        # Create summary data
         summary_data = {
             "Mercado": [
                 "Victoria Local", "Empate", "Victoria Visitante",
-                "Over 2.5 Goles", "Under 2.5 Goles",
-                "BTTS Sí", "BTTS No"
+                "Over 2.5 Goles", "Over 9.5 Córners", "Over 3.5 Tarjetas",
+                "BTTS Sí"
             ],
             "Probabilidad (%)": [
                 f"{match_result['home_win']*100:.1f}%",
                 f"{match_result['draw']*100:.1f}%",
                 f"{match_result['away_win']*100:.1f}%",
                 f"{goals_pred.over_under['2.5']['over']*100:.1f}%",
-                f"{goals_pred.over_under['2.5']['under']*100:.1f}%",
-                f"{goals_pred.btts['yes']*100:.1f}%",
-                f"{goals_pred.btts['no']*100:.1f}%"
+                f"{corners_pred.over_under['9.5']['over']*100:.1f}%",
+                f"{cards_pred.over_under['3.5']['over']*100:.1f}%",
+                f"{goals_pred.btts['yes']*100:.1f}%"
             ],
             "Cuota Justa": [
                 round(1/match_result['home_win'], 2),
                 round(1/match_result['draw'], 2),
                 round(1/match_result['away_win'], 2),
                 round(1/goals_pred.over_under['2.5']['over'], 2),
-                round(1/goals_pred.over_under['2.5']['under'], 2),
-                round(1/goals_pred.btts['yes'], 2),
-                round(1/goals_pred.btts['no'], 2)
+                round(1/corners_pred.over_under['9.5']['over'], 2),
+                round(1/cards_pred.over_under['3.5']['over'], 2),
+                round(1/goals_pred.btts['yes'], 2)
             ]
         }
-        
-        st.dataframe(summary_data, hide_index=True)
+        st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)

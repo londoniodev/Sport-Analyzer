@@ -7,6 +7,7 @@ from app.sports.football.predictions.handicap_predictor import HandicapPredictor
 from app.sports.football.predictions.corners_predictor import CornersPredictor, CornersPrediction
 from app.sports.football.predictions.exact_score import ExactScorePredictor, ExactScorePrediction
 from app.sports.football.predictions.goalscorer_predictor import GoalscorerPredictor, GoalscorerPrediction
+from app.sports.football.predictions.advanced_predictor import AdvancedPredictor, CornerPrediction, CardPrediction, ShotPrediction
 
 __all__ = [
     # Core models
@@ -21,6 +22,7 @@ __all__ = [
     'CornersPredictor',
     'ExactScorePredictor',
     'GoalscorerPredictor',
+    'AdvancedPredictor',
     # Prediction results
     'MatchPrediction',
     'GoalsPrediction',
@@ -28,5 +30,8 @@ __all__ = [
     'CornersPrediction',
     'ExactScorePrediction',
     'GoalscorerPrediction',
+    'CornerPrediction',
+    'CardPrediction',
+    'ShotPrediction'
 ]
 

@@ -85,3 +85,87 @@ class FootballAPIClient(ISportAPIClient):
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         return response.json().get('response', [])
+    
+    def get_all_leagues(self) -> List[Dict[str, Any]]:
+        """
+        Fetch ALL available leagues from API-Sports.
+        Returns list with league info including country, type, and seasons.
+        """
+        logger.info("Fetching all available leagues")
+        url = f"{BASE_URL}/leagues"
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json().get('response', [])
+        logger.info(f"Successfully fetched {len(data)} leagues")
+        return data
+    
+    def get_injuries(self, league_id: int, season: int) -> List[Dict[str, Any]]:
+        """
+        Fetch injuries for a league and season.
+        Returns player injuries with type, date, and expected return.
+        """
+        logger.info(f"Fetching injuries for league {league_id}, season {season}")
+        url = f"{BASE_URL}/injuries"
+        params = {'league': league_id, 'season': season}
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json().get('response', [])
+        logger.info(f"Successfully fetched {len(data)} injury records")
+        return data
+    
+    def get_players(self, team_id: int, season: int) -> List[Dict[str, Any]]:
+        """
+        Fetch all players for a team in a season.
+        Includes statistics like goals, assists, xG, xA.
+        """
+        logger.info(f"Fetching players for team {team_id}, season {season}")
+        url = f"{BASE_URL}/players"
+        params = {'team': team_id, 'season': season}
+        all_players = []
+        page = 1
+        
+        while True:
+            params['page'] = page
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            result = response.json()
+            data = result.get('response', [])
+            all_players.extend(data)
+            
+            # Check pagination
+            paging = result.get('paging', {})
+            if page >= paging.get('total', 1):
+                break
+            page += 1
+        
+        logger.info(f"Successfully fetched {len(all_players)} players for team {team_id}")
+        return all_players
+    
+    def get_predictions(self, fixture_id: int) -> Dict[str, Any]:
+        """
+        Fetch pre-match predictions including probable lineup.
+        Available ~24-48h before kickoff.
+        """
+        logger.info(f"Fetching predictions for fixture {fixture_id}")
+        url = f"{BASE_URL}/predictions"
+        params = {'fixture': fixture_id}
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json().get('response', [])
+        logger.info(f"Successfully fetched predictions for fixture {fixture_id}")
+        return data[0] if data else {}
+    
+    def get_fixture_players(self, fixture_id: int) -> List[Dict[str, Any]]:
+        """
+        Fetch player statistics for a specific fixture.
+        Includes goals, assists, rating, minutes played.
+        """
+        logger.info(f"Fetching player stats for fixture {fixture_id}")
+        url = f"{BASE_URL}/fixtures/players"
+        params = {'fixture': fixture_id}
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json().get('response', [])
+        logger.info(f"Successfully fetched player stats for {len(data)} teams in fixture {fixture_id}")
+        return data
+

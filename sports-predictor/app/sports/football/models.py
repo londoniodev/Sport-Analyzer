@@ -14,6 +14,10 @@ class League(SQLModel, table=True):
     name: str
     country: str
     season: int
+    league_type: Optional[str] = None  # 'League', 'Cup', 'Super Cup'
+    logo_url: Optional[str] = None
+    region: Optional[str] = None  # 'Europe', 'South America', 'Asia', etc.
+
 
 
 class Team(SQLModel, table=True):
@@ -33,6 +37,10 @@ class Player(SQLModel, table=True):
     name: str
     position: Optional[str] = None
     team_id: Optional[int] = Field(default=None, foreign_key="football_team.id")
+    photo_url: Optional[str] = None
+    nationality: Optional[str] = None
+    age: Optional[int] = None
+
 
 
 class Coach(SQLModel, table=True):
@@ -105,6 +113,8 @@ class PlayerMatchStats(SQLModel, table=True):
     minutes_played: Optional[int] = None
     rating: Optional[float] = None
     shots: Optional[int] = None
+    goals: Optional[int] = None
+    assists: Optional[int] = None
     passes_key: Optional[int] = None
     dribbles_success: Optional[int] = None
     cards_yellow: Optional[int] = None
@@ -114,3 +124,45 @@ class PlayerMatchStats(SQLModel, table=True):
     fixture: Optional["Fixture"] = Relationship()
     player: Optional["Player"] = Relationship()
     team: Optional["Team"] = Relationship()
+
+
+class PlayerSeasonStats(SQLModel, table=True):
+    """Aggregated player statistics for a season - used for xGC calculation."""
+    __tablename__ = "football_player_season_stats"
+    
+    player_id: int = Field(primary_key=True, foreign_key="football_player.id")
+    team_id: int = Field(primary_key=True, foreign_key="football_team.id")
+    season: int = Field(primary_key=True)
+    
+    appearances: Optional[int] = None
+    goals: Optional[int] = None
+    assists: Optional[int] = None
+    xg: Optional[float] = None  # Expected Goals
+    xa: Optional[float] = None  # Expected Assists
+    xgc: Optional[float] = None  # Expected Goal Contributions (xG + xA)
+    minutes_played: Optional[int] = None
+    
+    # Relationships
+    player: Optional["Player"] = Relationship()
+    team: Optional["Team"] = Relationship()
+
+
+class Injury(SQLModel, table=True):
+    """Player injury record."""
+    __tablename__ = "football_injury"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="football_player.id")
+    team_id: int = Field(foreign_key="football_team.id")
+    league_id: int = Field(foreign_key="football_league.id")
+    season: int
+    
+    injury_type: Optional[str] = None  # 'Muscle', 'Knee', 'Ankle', etc.
+    injury_reason: Optional[str] = None  # Specific description
+    date_reported: Optional[datetime] = None
+    expected_return: Optional[datetime] = None
+    
+    # Relationships
+    player: Optional["Player"] = Relationship()
+    team: Optional["Team"] = Relationship()
+    league: Optional["League"] = Relationship()
