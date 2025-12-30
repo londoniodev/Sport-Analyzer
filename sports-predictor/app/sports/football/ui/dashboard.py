@@ -145,11 +145,13 @@ def show_dashboard():
             # Region filter
             available_regions = list(set([l.region for l in leagues_in_db if l.region])) if leagues_in_db else []
             if available_regions:
+                # Custom label with icon hack using columns for label alignment if needed, but selectbox label support is limited.
+                # Using plain text for professional look
                 selected_region = st.selectbox(
-                    "🌎 Filtrar por Región",
+                    "Filtrar por Región",
                     options=["Todas"] + sorted(available_regions),
                     index=0,
-                    help="Filtra la lista de competiciones"
+                    help="Filtra la lista de competiciones por continente"
                 )
                 if selected_region != "Todas":
                     league_options = [(l.id, f"{l.name} ({l.country})") for l in leagues_in_db if l.region == selected_region]
@@ -158,20 +160,20 @@ def show_dashboard():
 
         with c2:
             season = st.selectbox(
-                "📅 Temporada",
+                "Temporada",
                 options=[2026, 2025, 2024, 2023, 2022],
                 index=0 # 2026 as default
             )
 
         with c3:
-            st.markdown("<br>", unsafe_allow_html=True) # Spacer
+            st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True) # Align checkbox with selectboxes
             sync_details = st.checkbox("Incluir Detalles (Alineaciones)", value=False, 
                                        help="Descarga lineups y stats de jugadores. Consume más tiempo.")
 
         # ROW 2: League Selector (Full Width)
         st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
         league_id = st.selectbox(
-            "🏆 Competición",
+            "Competición",
             options=league_options,
             format_func=lambda x: x[1]
         )
@@ -183,13 +185,13 @@ def show_dashboard():
         b1, b2, b3 = st.columns(3)
         
         with b1:
-             sync_button = st.button("🔄 Sincronizar Liga", type="primary", use_container_width=True, help="Descarga partidos de la liga seleccionada")
+             sync_button = st.button("Sincronizar Liga", type="primary", use_container_width=True, help="Descarga partidos de la liga seleccionada")
         
         with b2:
-             batch_btn = st.button("⚡ Sync Prioritarias (Batch)", type="secondary", use_container_width=True, help="Descarga TODAS las ligas Tier 1 y 2")
+             batch_btn = st.button("Sync Prioritarias (Batch)", type="secondary", use_container_width=True, help="Descarga TODAS las ligas Tier 1 y 2")
              
         with b3:
-             injuries_btn = st.button("🚑 Sync Lesiones", type="secondary", use_container_width=True, help="Descarga reporte de lesionados")
+             injuries_btn = st.button("Sync Lesiones", type="secondary", use_container_width=True, help="Descarga reporte de lesionados")
 
         # Logic implementation
         if sync_button:
@@ -198,10 +200,10 @@ def show_dashboard():
                     from app.sports.football.etl import FootballETL
                     etl = FootballETL()
                     count = etl.sync_league_data(league_id=league_id[0], season=season, sync_details=sync_details)
-                    st.success(f"✅ {count} partidos sincronizados correctamente!")
+                    st.success(f"Operación completada: {count} partidos sincronizados.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error: {e}")
+                    st.error(f"Error: {e}")
 
         if batch_btn:
              with st.spinner("Sincronizando Tier 1 y Tier 2..."):
@@ -209,10 +211,10 @@ def show_dashboard():
                     from app.sports.football.etl import FootballETL
                     etl = FootballETL()
                     res = etl.sync_priority_leagues(season=season, sync_details=False)
-                    st.success(f"✅ Batch completado: {res['success']} ligas OK")
+                    st.success(f"Batch completado: {res['success']} ligas procesadas correctamente.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error Batch: {e}")
+                    st.error(f"Error Batch: {e}")
 
         if injuries_btn:
             with st.spinner("Buscando lesiones..."):
