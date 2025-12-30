@@ -1,0 +1,28 @@
+# Archivos de desarrollo
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Archivos grandes de datos
+*.json
+*.csv
+
+# Documentación
+*.md
+!requirements.txt
+
+# Tests
+tests/
+pytest.ini
+
+# Misc
+.env
+.env.*
+!.env.example
