@@ -35,7 +35,7 @@ class FootballETL(ISportETL):
     def __init__(self):
         self.api_client = FootballAPIClient()
     
-    def sync_priority_leagues(self, season: int = 2024, sync_details: bool = False) -> Dict[str, int]:
+    def sync_priority_leagues(self, season: int = 2026, sync_details: bool = False) -> Dict[str, int]:
         """
         Sync all Tier 1, Tier 2, and International priority leagues in one go.
         """
@@ -410,7 +410,7 @@ class FootballETL(ISportETL):
                 id=league_info.get('id'),
                 name=league_info.get('name', ''),
                 country=country_name,
-                season=current_season or 2024,
+                season=current_season or 2026,
                 league_type=league_info.get('type'),
                 logo_url=league_info.get('logo'),
                 region=region

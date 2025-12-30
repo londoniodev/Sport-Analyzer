@@ -90,15 +90,15 @@ def show_dashboard():
     st.markdown("---")
     
     # ═══════════════════════════════════════════════════════
-    # DYNAMIC LEAGUE SELECTOR
+    # DYNAMIC LEAGUE SELECTOR (REDESIGNED)
     # ═══════════════════════════════════════════════════════
     st.markdown(f"### {render_icon('sync')} Sincronización de Datos", unsafe_allow_html=True)
     
+    # Main Card Container
     with st.container():
         st.markdown(f"""
-        <div class="prediction-card">
-            <h4 style="margin-top: 0; margin-bottom: 16px;">{render_icon('settings')} Configuración de Descarga</h4>
-        </div>
+        <div style="background-color: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
+            <h4 style="margin-top: 0; margin-bottom: 20px; color: var(--text-primary);">{render_icon('settings')} Configuración de Descarga</h4>
         """, unsafe_allow_html=True)
         
         # Build league options - dynamic from DB or fallback to hardcoded
@@ -138,48 +138,62 @@ def show_dashboard():
                 (88, "Eredivisie"),
             ]
         
-        col1, col2 = st.columns([3, 1])
+        # ROW 1: Filters & Config
+        c1, c2, c3 = st.columns(3)
         
-        with col1:
+        with c1:
             # Region filter
             available_regions = list(set([l.region for l in leagues_in_db if l.region])) if leagues_in_db else []
             if available_regions:
                 selected_region = st.selectbox(
-                    "Filtrar por Región",
+                    "🌎 Filtrar por Región",
                     options=["Todas"] + sorted(available_regions),
-                    index=0
+                    index=0,
+                    help="Filtra la lista de competiciones"
                 )
-                
-                # Filter leagues by region
                 if selected_region != "Todas":
                     league_options = [(l.id, f"{l.name} ({l.country})") for l in leagues_in_db if l.region == selected_region]
-        
-        with col2:
+            else:
+                 st.info("Sincroniza ligas para ver filtros")
+
+        with c2:
             season = st.selectbox(
-                "Temporada",
-                options=[2024, 2023, 2022, 2021],
-                index=0
+                "📅 Temporada",
+                options=[2026, 2025, 2024, 2023, 2022],
+                index=0 # 2026 as default
             )
+
+        with c3:
+            st.markdown("<br>", unsafe_allow_html=True) # Spacer
+            sync_details = st.checkbox("Incluir Detalles (Alineaciones)", value=False, 
+                                       help="Descarga lineups y stats de jugadores. Consume más tiempo.")
+
+        # ROW 2: League Selector (Full Width)
+        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        league_id = st.selectbox(
+            "🏆 Competición",
+            options=league_options,
+            format_func=lambda x: x[1]
+        )
         
-        col1, col2, col3 = st.columns([2, 1, 1])
+        st.markdown("</div>", unsafe_allow_html=True) # End Card HTML
         
-        with col1:
-            league_id = st.selectbox(
-                "Competición",
-                options=league_options,
-                format_func=lambda x: x[1]
-            )
+        # ROW 3: Actions (Buttons)
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        b1, b2, b3 = st.columns(3)
         
-        with col2:
-            sync_details = st.checkbox("Sincronizar Detalles", value=False, 
-                                       help="Incluye alineaciones, estadísticas de jugadores y más (consume más cuota)")
+        with b1:
+             sync_button = st.button("🔄 Sincronizar Liga", type="primary", use_container_width=True, help="Descarga partidos de la liga seleccionada")
         
-        with col3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            sync_button = st.button("Iniciar Sincronización", type="primary", use_container_width=True)
-        
+        with b2:
+             batch_btn = st.button("⚡ Sync Prioritarias (Batch)", type="secondary", use_container_width=True, help="Descarga TODAS las ligas Tier 1 y 2")
+             
+        with b3:
+             injuries_btn = st.button("🚑 Sync Lesiones", type="secondary", use_container_width=True, help="Descarga reporte de lesionados")
+
+        # Logic implementation
         if sync_button:
-            with st.spinner("Conectando con API-Sports..."):
+            with st.spinner(f"Sincronizando {league_id[1]}..."):
                 try:
                     from app.sports.football.etl import FootballETL
                     etl = FootballETL()
@@ -187,35 +201,29 @@ def show_dashboard():
                     st.success(f"✅ {count} partidos sincronizados correctamente!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error durante la sincronización: {e}")
-        
-        # Batch actions
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("Sync Priority (Batch)", use_container_width=True, 
-                         help="Descarga básica de todas las ligas Core de una vez"):
-                with st.spinner("Sincronizando todas las ligas prioritarias..."):
-                    try:
-                        from app.sports.football.etl import FootballETL
-                        etl = FootballETL()
-                        res = etl.sync_priority_leagues(sync_details=False)
-                        st.success(f"✅ Finalizado: {res['success']} exitosas, {res['error']} errores")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
-                        
-        with col2:
-            if st.button("Sincronizar Lesiones", use_container_width=True):
-                with st.spinner("Descargando lesiones..."):
-                    try:
-                        from app.sports.football.etl import FootballETL
-                        etl = FootballETL()
-                        count = etl.sync_injuries(league_id=league_id[0], season=season)
-                        st.success(f"✅ {count} lesiones sincronizadas!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
+                    st.error(f"❌ Error: {e}")
+
+        if batch_btn:
+             with st.spinner("Sincronizando Tier 1 y Tier 2..."):
+                try:
+                    from app.sports.football.etl import FootballETL
+                    etl = FootballETL()
+                    res = etl.sync_priority_leagues(season=season, sync_details=False)
+                    st.success(f"✅ Batch completado: {res['success']} ligas OK")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error Batch: {e}")
+
+        if injuries_btn:
+            with st.spinner("Buscando lesiones..."):
+                try:
+                    from app.sports.football.etl import FootballETL
+                    etl = FootballETL()
+                    count = etl.sync_injuries(league_id=league_id[0], season=season)
+                    st.success(f"✅ {count} lesiones actualizadas")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error Lesiones: {e}")
     
     st.markdown("---")
     
