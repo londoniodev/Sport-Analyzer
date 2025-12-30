@@ -120,36 +120,13 @@ def main():
         # Spacer
         st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
         
-        # 3. Theme Toggle (Bottom)
+        # Version (Bottom)
         st.markdown("<div style='margin: 30px 0 10px 0; border-top: 1px solid var(--border);'></div>", unsafe_allow_html=True)
-        
-        # Compact theme selector layout
-        col_theme, col_ver = st.columns([2, 1])
-        with col_theme:
-            st.caption("APARIENCIA")
-            theme_options = ["Oscuro", "Claro"]
-            default_idx = 0 if st.session_state.dark_mode else 1
-            
-            selected_theme = st.radio(
-                "Tema",
-                options=theme_options,
-                index=default_idx,
-                horizontal=True,
-                label_visibility="collapsed"
-            )
-            
-            # Detect change
-            is_dark_selected = selected_theme == "Oscuro"
-            if is_dark_selected != st.session_state.dark_mode:
-                st.session_state.dark_mode = is_dark_selected
-                st.rerun()
-        
-        with col_ver:
-             st.markdown(f"""
-                <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: right; padding-top: 25px;">
-                    v1.2.0
-                </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center; padding-top: 10px;">
+                v1.2.0
+            </div>
+        """, unsafe_allow_html=True)
     
     # ═══════════════════════════════════════════════════════
     # MAIN CONTENT
