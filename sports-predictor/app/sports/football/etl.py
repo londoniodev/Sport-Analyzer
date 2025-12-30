@@ -392,7 +392,8 @@ class FootballETL(ISportETL):
         if not league_id or league_id not in self.ALLOWED_LEAGUE_IDS:
             return
         
-        # Determine region based on country
+        # Extract country info and determine region
+        country_info = data.get('country', {})
         country_name = country_info.get('name', '')
         region = self._get_region_from_country(country_name)
         

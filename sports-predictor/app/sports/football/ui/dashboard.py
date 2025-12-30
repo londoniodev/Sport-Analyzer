@@ -55,41 +55,6 @@ def show_dashboard():
     st.markdown("<br>", unsafe_allow_html=True)
     
     # ═══════════════════════════════════════════════════════
-    # SYNC ALL LEAGUES SECTION
-    # ═══════════════════════════════════════════════════════
-    st.markdown(f"### {render_icon('public')} Gestión de Ligas Prioritarias", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.caption("Carga únicamente las ligas Tier 1 y Tier 2 (Premier, LaLiga, Serie A, Champions, Libertadores, BetPlay, etc.)")
-    with col2:
-        if st.button("Cargar Permitidas", type="secondary", use_container_width=True, 
-                     help="Solo descarga las ligas del Core Rushbet"):
-            with st.spinner("Sincronizando catálogo filtrado..."):
-                try:
-                    from app.sports.football.etl import FootballETL
-                    etl = FootballETL()
-                    count = etl.sync_all_leagues()
-                    st.success(f"✅ {count} ligas permitidas cargadas!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-    with col3:
-        if st.button("Limpiar BD", type="secondary", use_container_width=True, 
-                     help="Elimina ligas y datos que no están en la lista prioritaria"):
-            with st.spinner("Limpiando base de datos..."):
-                try:
-                    from app.sports.football.etl import FootballETL
-                    etl = FootballETL()
-                    res = etl.cleanup_non_priority_data()
-                    st.success(f"✅ Se eliminaron {res.get('removed_leagues', 0)} ligas no autorizadas")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-    
-    st.markdown("---")
-    
-    # ═══════════════════════════════════════════════════════
     # SYNC SECTION - REDESIGNED
     # ═══════════════════════════════════════════════════════
     st.markdown(f"### {render_icon('sync')} Sincronización de Datos", unsafe_allow_html=True)
@@ -210,69 +175,31 @@ def show_dashboard():
                     from app.sports.football.etl import FootballETL
                     etl = FootballETL()
                     count = etl.sync_injuries(league_id=league_id[0], season=season)
-                    st.success(f"✅ {count} lesiones actualizadas")
+                    st.success(f"Lesiones actualizadas: {count}")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error Lesiones: {e}")
+                    st.error(f"Error Lesiones: {e}")
     
     st.markdown("---")
     
-    # API Status
-    st.markdown(f"### {render_icon('cloud_queue')} Estado de Servicios", unsafe_allow_html=True)
+    # Quick Cache Clear (only useful action)
+    st.markdown(f"### {render_icon('bolt')} Utilidades", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown(f"""
-        <div style="background: var(--bg-card); border: 1px solid var(--success); 
-                    padding: 16px; border-radius: 12px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="background: rgba(16, 185, 129, 0.2); border-radius: 50%; color: var(--success);
-                            display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;">
-                    {render_icon('check_circle')}
-                </div>
-                <div>
-                    <div style="font-weight: 600; color: var(--text-primary);">API-Sports</div>
-                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Conexión estable</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div style="background: var(--bg-card); border: 1px solid var(--accent); 
-                    padding: 16px; border-radius: 12px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="background: rgba(59, 130, 246, 0.2); border-radius: 50%; color: var(--accent);
-                            display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;">
-                    {render_icon('bar_chart')}
-                </div>
-                <div>
-                    <div style="font-weight: 600; color: var(--text-primary);">Cuota de Uso</div>
-                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Verificar en dashboard API</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Quick Actions
-    st.markdown(f"### {render_icon('bolt')} Acciones Rápidas", unsafe_allow_html=True)
-
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("Resetear Base de Datos", use_container_width=True):
-            st.warning("Acción no disponible en demo")
-            
-    with col2:
-        if st.button("Limpiar Caché", use_container_width=True):
+        if st.button("Limpiar Caché Local", use_container_width=True):
             st.cache_data.clear()
-            st.success("Caché local eliminado")
-            
-    with col3:
-        if st.button("Ver Logs", use_container_width=True):
-            st.info("Logs del sistema: OK")
+            st.success("Caché eliminado correctamente")
+    
+    with col2:
+        if st.button("Limpiar Ligas No Prioritarias", use_container_width=True, help="Elimina de la BD cualquier liga que no esté en la whitelist"):
+            with st.spinner("Limpiando..."):
+                try:
+                    from app.sports.football.etl import FootballETL
+                    etl = FootballETL()
+                    res = etl.cleanup_non_priority_data()
+                    st.success(f"Eliminadas: {res.get('removed_leagues', 0)} ligas")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")

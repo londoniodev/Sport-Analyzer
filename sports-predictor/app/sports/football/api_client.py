@@ -10,14 +10,22 @@ from app.core.interfaces import ISportAPIClient
 
 load_dotenv()
 
-# Setup logger
+# Setup logger with visible output
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 API_KEY = os.getenv("API_KEY")
 BASE_URL = "https://v3.football.api-sports.io"
 
+# Log API key status on module load
+if API_KEY:
+    masked_key = API_KEY[:4] + "..." + API_KEY[-4:] if len(API_KEY) > 8 else "***"
+    logger.info(f"API Key loaded: {masked_key}")
+else:
+    logger.warning("API_KEY environment variable is NOT SET!")
+
 headers = {
-    'x-rapidapi-key': API_KEY,
+    'x-rapidapi-key': API_KEY or '',
     'x-rapidapi-host': 'v3.football.api-sports.io'
 }
 
@@ -29,14 +37,33 @@ class FootballAPIClient(ISportAPIClient):
         """
         Fetch fixtures for a league and season.
         """
-        logger.info(f"Fetching fixtures for league {league_id}, season {season}")
+        logger.info(f"[API-GET] Fixtures: league={league_id}, season={season}")
         url = f"{BASE_URL}/fixtures"
         params = {'league': league_id, 'season': season}
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json().get('response', [])
-        logger.info(f"Successfully fetched {len(data)} fixtures")
-        return data
+        
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            logger.info(f"[API-RESPONSE] Status: {response.status_code}")
+            
+            if response.status_code == 401:
+                logger.error("API Key is invalid or expired!")
+                return []
+            
+            response.raise_for_status()
+            json_data = response.json()
+            
+            # Log API errors if present
+            if json_data.get('errors'):
+                logger.error(f"[API-ERROR] {json_data.get('errors')}")
+                return []
+            
+            data = json_data.get('response', [])
+            logger.info(f"[API-SUCCESS] Fetched {len(data)} fixtures")
+            return data
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"[API-EXCEPTION] {type(e).__name__}: {e}")
+            return []
     
     def get_event_stats(self, event_id: int) -> List[Dict[str, Any]]:
         """
