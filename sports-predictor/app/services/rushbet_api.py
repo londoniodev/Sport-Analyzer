@@ -132,3 +132,116 @@ class RushbetClient:
             parsed_events.append(item)
             
         return parsed_events
+    
+    def get_event_details(self, event_id: int) -> Optional[Dict[str, Any]]:
+        """Obtiene todos los mercados de apuestas disponibles para un evento específico."""
+        endpoint = f"{self.BASE_URL}/betoffer/event/{event_id}.json"
+        
+        params = {
+            "lang": self.LANG,
+            "market": self.MARKET,
+            "client_id": self.CLIENT_ID,
+            "channel_id": self.CHANNEL_ID,
+            "nc_id": int(time.time() * 1000)
+        }
+        
+        try:
+            response = self.session.get(endpoint, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            return self._parse_event_details(data)
+        except requests.RequestException as e:
+            print(f"Error fetching event details: {e}")
+            return None
+    
+    def _parse_event_details(self, data: Dict) -> Dict[str, Any]:
+        """Parsea datos completos de un evento incluyendo todos los mercados."""
+        offers = data.get("betOffers", [])
+        event_info = data.get("events", [{}])[0] if data.get("events") else {}
+        
+        result = {
+            "event_id": event_info.get("id"),
+            "name": event_info.get("name"),
+            "home_team": event_info.get("homeName"),
+            "away_team": event_info.get("awayName"),
+            "start_time": event_info.get("start"),
+            "state": event_info.get("state", "NOT_STARTED"),
+            "score": event_info.get("score", {}),
+            "markets": {"principal": [], "goles": [], "handicap": [], "mitades": [], "otros": []}
+        }
+        
+        for offer in offers:
+            if offer.get("suspended"):
+                continue
+            criterion = offer.get("criterion", {})
+            offer_label = criterion.get("label", offer.get("label", ""))
+            outcomes = offer.get("outcomes", [])
+            
+            parsed_outcomes = [{
+                "label": out.get("label"),
+                "odds": out.get("odds", 0) / 1000.0,
+                "line": out.get("line"),
+                "type": out.get("type")
+            } for out in outcomes]
+            
+            market_data = {"label": offer_label, "outcomes": parsed_outcomes}
+            label_lower = offer_label.lower()
+            
+            if any(x in label_lower for x in ["1x2", "resultado", "ganador", "match winner", "tiempo reglam", "doble oport", "double chance"]):
+                result["markets"]["principal"].append(market_data)
+            elif any(x in label_lower for x in ["más/menos", "over", "under", "goles", "total", "ambos", "btts", "marcan", "exacto"]):
+                result["markets"]["goles"].append(market_data)
+            elif any(x in label_lower for x in ["hándicap", "handicap", "spread"]):
+                result["markets"]["handicap"].append(market_data)
+            elif any(x in label_lower for x in ["1ª mitad", "2ª mitad", "primera mitad", "segunda mitad", "half"]):
+                result["markets"]["mitades"].append(market_data)
+            else:
+                result["markets"]["otros"].append(market_data)
+        
+        return result
+    
+    def get_event_statistics(self, event_id: int) -> Optional[Dict[str, Any]]:
+        """Obtiene estadísticas del partido (disponible para eventos en vivo)."""
+        endpoint = f"{self.BASE_URL}/event/{event_id}/statistics.json"
+        
+        params = {
+            "lang": self.LANG,
+            "market": self.MARKET,
+            "client_id": self.CLIENT_ID,
+            "channel_id": self.CHANNEL_ID,
+            "nc_id": int(time.time() * 1000)
+        }
+        
+        try:
+            response = self.session.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            return self._parse_statistics(data)
+        except requests.RequestException as e:
+            print(f"Error fetching statistics: {e}")
+            return None
+    
+    def _parse_statistics(self, data: Dict) -> Dict[str, Any]:
+        """Parsea las estadísticas de un partido."""
+        stats = data.get("statistics", {})
+        match_events = data.get("matchEvents", [])
+        
+        result = {"stats": {}, "events": []}
+        
+        for stat_group in stats.get("sets", []):
+            for stat in stat_group.get("statistics", []):
+                result["stats"][stat.get("name", "")] = {
+                    "home": stat.get("home"),
+                    "away": stat.get("away")
+                }
+        
+        for event in match_events:
+            result["events"].append({
+                "type": event.get("type"),
+                "team": event.get("team"),
+                "player": event.get("player"),
+                "minute": event.get("minute"),
+                "extra_minute": event.get("extraMinute")
+            })
+        
+        return result
