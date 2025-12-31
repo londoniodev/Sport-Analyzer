@@ -16,6 +16,12 @@ class RushbetClient:
     CLIENT_ID = "2" # Can be 2 or 200
     CHANNEL_ID = "1"
     
+    # Patrones para identificar y excluir ligas de eSports
+    ESPORTS_PATTERNS = [
+        "esport", "iesport", "cyber", "battle", "batalla", 
+        "2x6min", "2x5min", "2x4min", "2x3min", "simulated"
+    ]
+    
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
@@ -50,9 +56,19 @@ class RushbetClient:
             print(f"Error fetching Rushbet data: {e}")
             return []
             
+    def _is_esports(self, text: str) -> bool:
+        """
+        Verifica si el texto contiene patrones de eSports.
+        """
+        if not text:
+            return False
+        text_lower = text.lower()
+        return any(pattern in text_lower for pattern in self.ESPORTS_PATTERNS)
+    
     def _parse_events(self, raw_events: List[Dict]) -> List[Dict[str, Any]]:
         """
         Parse raw Kambi event objects into simplified dictionaries.
+        Excluye automáticamente eventos de eSports.
         """
         parsed_events = []
         
@@ -71,6 +87,10 @@ class RushbetClient:
             if path:
                 # Usually last item is league, second last is country
                 league = path[-1].get("name") if path else "Unknown"
+            
+            # Excluir eSports verificando nombre del evento y liga
+            if self._is_esports(name) or self._is_esports(league):
+                continue
                 
             # Parse 1X2 Odds (Match Winner)
             # Kambi usually puts Match Winner as the first offer, or look for criterion.id=1005906 or label "Full Time" (es: "Tiempo Reglamentario")

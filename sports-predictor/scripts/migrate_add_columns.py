@@ -1,18 +1,19 @@
 """
-Database Migration Script - Add missing columns to football_league table.
-Run once to fix the schema mismatch.
+Script de Migración de Base de Datos - Añade columnas faltantes a la tabla 'football_league'.
+Este script se creó para solucionar un error de 'UndefinedColumn' cuando la base de datos
+no estaba sincronizada con los últimos cambios en el modelo de SQLModel.
 """
 import os
 import sys
 from pathlib import Path
 
-# Add project root to path and load env from there
+# Configuración de rutas para importar módulos
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
 
-# Load .env from project root
+# Cargar variables de entorno desde el archivo .env
 env_path = PROJECT_ROOT / '.env'
 load_dotenv(env_path)
 
@@ -21,40 +22,43 @@ from sqlalchemy import create_engine, text
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    print(f"ERROR: DATABASE_URL not found")
-    print(f"Looked for .env at: {env_path}")
-    print(f"Exists: {env_path.exists()}")
+    print(f"ERROR: DATABASE_URL no encontrada")
+    print(f"Buscando .env en: {env_path}")
+    print(f"Existe el archivo: {env_path.exists()}")
     exit(1)
 
-print(f"Connecting to database...")
+print(f"Conectando a la base de datos...")
 engine = create_engine(DATABASE_URL)
 
 with engine.connect() as conn:
     try:
-        # Add league_type column if it doesn't exist
+        # Añadir columna 'league_type' si no existe
+        # Nota: Se usa VARCHAR(50) para almacenar 'League', 'Cup', etc.
         conn.execute(text("""
             ALTER TABLE football_league 
             ADD COLUMN IF NOT EXISTS league_type VARCHAR(50)
         """))
-        print("Added: league_type")
+        print("Añadida: league_type")
         
-        # Add logo_url column if it doesn't exist
+        # Añadir columna 'logo_url' para almacenar el link a la imagen oficial
         conn.execute(text("""
             ALTER TABLE football_league 
             ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)
         """))
-        print("Added: logo_url")
+        print("Añadida: logo_url")
         
-        # Add region column if it doesn't exist
+        # Añadir columna 'region' para agrupar ligas por continentes (Europe, South America, etc.)
         conn.execute(text("""
             ALTER TABLE football_league 
             ADD COLUMN IF NOT EXISTS region VARCHAR(50)
         """))
-        print("Added: region")
+        print("Añadida: region")
         
+        # Confirmar los cambios
         conn.commit()
-        print("\nMigration completed successfully!")
+        print("\n✅ ¡Migración completada con éxito!")
         
     except Exception as e:
-        print(f"\nMigration failed: {e}")
+        # En caso de error, deshacer cambios parciales
+        print(f"\n❌ Error en la migración: {e}")
         conn.rollback()

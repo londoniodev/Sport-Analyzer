@@ -1,6 +1,7 @@
 """
-Football ETL - Extract, Transform, Load for football data.
-Refactored for cleaner code and better error handling.
+Football ETL - Proceso de Extracción, Transformación y Carga para datos de fútbol.
+Este módulo se encarga de obtener datos de la API oficial (API-Sports),
+procesarlos a los modelos de la base de datos y guardarlos de forma eficiente.
 """
 import logging
 import time
@@ -14,72 +15,106 @@ from app.sports.football.models import (
     League, Team, Player, Coach, Fixture, TeamMatchStats, PlayerMatchStats, Injury
 )
 
-# Configure logger
+# Configuración del sistema de logs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
 class FootballETL(ISportETL):
-    """ETL operations for football data."""
+    """Motor de ETL para datos de fútbol."""
     
-    # Priority leagues by tier - single source of truth
+    # ═══════════════════════════════════════════════════════
+    # CONFIGURACIÓN DE LIGAS Y FILTROS
+    # ═══════════════════════════════════════════════════════
+    
+    # Ligas prioritarias organizadas por nivel (Tier).
+    # Solo procesamos datos detallados para estas ligas para optimizar costos de API y espacio.
     PRIORITY_LEAGUES = {
-        "TIER_1": [2, 13, 39, 140, 135, 78, 61, 239],      # Champions, Libertadores, Top 5 Leagues, BetPlay
-        "TIER_2": [3, 40, 71, 253, 262, 94, 88, 11, 128],  # Europa, Championship, Brasileirao, MLS, etc.
-        "INTERNATIONAL": [1, 4, 9, 37]                      # World Cup, Euro, etc.
+        "TIER_1": [2, 13, 39, 140, 135, 78, 61, 239],      # Champions, Libertadores, Premier, LaLiga, BetPlay
+        "TIER_2": [3, 40, 71, 253, 262, 94, 88, 11, 128],  # Europa League, Brasileirao, MLS, etc.
+        "INTERNATIONAL": [1, 4, 9, 37]                      # Mundial, Eurocopa, Copa América, etc.
     }
     
-    # Derived set for fast lookup
+    # Conjunto de IDs permitidos para búsquedas rápidas (O(1))
     ALLOWED_LEAGUE_IDS = set(
         league_id 
         for tier in PRIORITY_LEAGUES.values() 
         for league_id in tier
     )
     
-    # Region mapping - only for whitelisted league countries
+    # Mapeo de países a regiones para facilitar filtros en la UI
+    # Usamos nombres en inglés para que coincidan con los datos de API-Sports.
     REGION_MAP = {
-        'Europe': ['England', 'Spain', 'Italy', 'Germany', 'France', 'Portugal', 'Netherlands', 'World'],
-        'South America': ['Brazil', 'Argentina', 'Colombia'],
-        'North America': ['USA', 'Mexico']
+        'Europa': [
+            'England', 'Spain', 'Italy', 'Germany', 'France', 'Portugal', 'Netherlands', 
+            'Austria', 'Belgium', 'Croatia', 'Scotland', 'Norway', 'Switzerland',
+            'Poland', 'Wales', 'Estonia', 'Denmark', 'Ukraine', 'Israel', 'Iceland',
+            'Sweden', 'Turkey', 'Greece', 'Georgia', 'Serbia', 'Hungary', 
+            'Czech Republic', 'Slovakia'
+        ],
+        'Sudamérica': [
+            'Brazil', 'Argentina', 'Colombia', 'Ecuador', 'Paraguay', 'Uruguay', 'Bolivia'
+        ],
+        'Norteamérica': [
+            'USA', 'Mexico', 'Canada', 'Curacao', 'Haiti', 'Panama', 'Costa Rica', 'Jamaica'
+        ],
+        'África': [
+            'Algeria', 'Cape Verde', 'Ivory Coast', 'Egypt', 'Ghana', 'Morocco', 
+            'Senegal', 'South Africa', 'Tunisia', 'Mali'
+        ],
+        'Asia': [
+            'Saudi Arabia', 'Australia', 'South Korea', 'Iran', 'Japan', 'Jordan', 
+            'Qatar', 'Uzbekistan', 'Iraq'
+        ],
+        'Oceanía': [
+            'New Zealand', 'Solomon Islands'
+        ],
+        'Internacional': ['World']
     }
     
     def __init__(self):
+        # Cliente encargado de las peticiones HTTP a la API
         self.api_client = FootballAPIClient()
     
     # ═══════════════════════════════════════════════════════
-    # SESSION HELPERS
+    # GESTIÓN DE BASE DE DATOS
     # ═══════════════════════════════════════════════════════
     
     @contextmanager
     def _get_db_session(self) -> Generator[Session, None, None]:
-        """Context manager for database sessions with automatic commit/rollback."""
+        """
+        Administrador de contexto para sesiones de base de datos.
+        Asegura que los cambios se guarden (commit) o se cancelen (rollback) en caso de error.
+        """
         session = next(get_session())
         try:
             yield session
             session.commit()
         except Exception as e:
             session.rollback()
-            logger.error(f"Database error: {e}")
+            logger.error(f"Error en la base de datos: {e}")
             raise
         finally:
             session.close()
     
     # ═══════════════════════════════════════════════════════
-    # PUBLIC SYNC METHODS
+    # MÉTODOS PÚBLICOS DE SINCRONIZACIÓN
     # ═══════════════════════════════════════════════════════
     
     def sync_league_data(self, league_id: int, season: int, sync_details: bool = False) -> int:
         """
-        Sync all fixtures for a league/season.
-        Returns count of fixtures synced.
+        Sincroniza todos los partidos (fixtures) de una liga y temporada específica.
+        - sync_details: Si es True, descarga también estadísticas de jugadores y equipos.
         """
-        logger.info(f"[SYNC] League {league_id}, Season {season}")
+        logger.info(f"[SYNC] Iniciando sincronización de Liga {league_id}, Temporada {season}")
         
+        # 1. Obtener partidos de la API
         fixtures_data = self.api_client.get_events(league_id, season)
         if not fixtures_data:
-            logger.warning(f"[SYNC] No fixtures returned for league {league_id}")
+            logger.warning(f"[SYNC] No se encontraron partidos para la liga {league_id}")
             return 0
         
+        # 2. Guardar cada partido en la base de datos
         fixture_ids = []
         with self._get_db_session() as session:
             for fixture_data in fixtures_data:
@@ -87,18 +122,19 @@ class FootballETL(ISportETL):
                 if fixture:
                     fixture_ids.append(fixture.id)
         
-        logger.info(f"[SYNC] Saved {len(fixture_ids)} fixtures for league {league_id}")
+        logger.info(f"[SYNC] Guardados {len(fixture_ids)} partidos para la liga {league_id}")
         
-        # Sync details if requested
+        # 3. Sincronizar detalles (estadísticas) si se solicita
+        # Esto genera múltiples peticiones a la API, se hace en segundo plano
         if sync_details and fixture_ids:
             self._sync_fixture_details_batch(fixture_ids)
         
         return len(fixture_ids)
     
     def sync_priority_leagues(self, season: int = 2026, sync_details: bool = False) -> Dict[str, int]:
-        """Sync all priority leagues (Tier 1, 2, and International)."""
+        """Sincroniza automáticamente todas las ligas de la lista 'whitelist'."""
         all_ids = list(self.ALLOWED_LEAGUE_IDS)
-        logger.info(f"[BATCH] Starting sync for {len(all_ids)} priority leagues")
+        logger.info(f"[BATCH] Sincronizando {len(all_ids)} ligas prioritarias")
         
         results = {"success": 0, "error": 0, "total": len(all_ids)}
         
@@ -106,20 +142,23 @@ class FootballETL(ISportETL):
             try:
                 count = self.sync_league_data(league_id, season, sync_details)
                 results["success"] += 1
-                logger.info(f"[BATCH] League {league_id}: {count} fixtures")
+                logger.info(f"[BATCH] Liga {league_id} completada: {count} partidos")
             except Exception as e:
-                logger.error(f"[BATCH] League {league_id} failed: {e}")
+                logger.error(f"[BATCH] Error en liga {league_id}: {e}")
                 results["error"] += 1
         
         return results
     
     def sync_all_leagues(self) -> int:
-        """Sync league metadata for all whitelisted leagues."""
-        logger.info("[CATALOG] Fetching league catalog from API")
+        """
+        Descarga el catálogo completo de ligas de la API pero solo guarda 
+        aquellas que están en nuestra lista permitida.
+        """
+        logger.info("[CATALOG] Descargando catálogo de ligas desde la API")
         
         leagues_data = self.api_client.get_all_leagues()
         if not leagues_data:
-            logger.warning("[CATALOG] No leagues returned from API")
+            logger.warning("[CATALOG] La API no devolvió ligas")
             return 0
         
         count = 0
@@ -130,12 +169,12 @@ class FootballETL(ISportETL):
                     self._process_league_full(league_data, session)
                     count += 1
         
-        logger.info(f"[CATALOG] Synced {count} whitelisted leagues")
+        logger.info(f"[CATALOG] Sincronizadas {count} ligas permitidas")
         return count
     
     def sync_injuries(self, league_id: int, season: int) -> int:
-        """Sync injury data for a league/season."""
-        logger.info(f"[INJURIES] League {league_id}, Season {season}")
+        """Descarga y guarda las lesiones reportadas para una liga y temporada."""
+        logger.info(f"[INJURIES] Liga {league_id}, Temporada {season}")
         
         injuries_data = self.api_client.get_injuries(league_id, season)
         if not injuries_data:
@@ -145,64 +184,77 @@ class FootballETL(ISportETL):
             for injury_data in injuries_data:
                 self._process_injury(injury_data, league_id, season, session)
         
-        logger.info(f"[INJURIES] Synced {len(injuries_data)} injuries")
+        logger.info(f"[INJURIES] Sincronizadas {len(injuries_data)} lesiones")
         return len(injuries_data)
     
     def sync_event_details(self, event_id: int) -> None:
-        """Sync detailed stats, lineups, and player stats for a fixture."""
-        logger.info(f"[DETAILS] Fixture {event_id}")
+        """
+        Descarga todos los detalles de un partido específico:
+        - Estadísticas de equipo (posesión, tiros, etc.)
+        - Alineaciones oficiales (jugadores iniciales y suplentes)
+        - Estadísticas por jugador (calificación, pases, goles, etc.)
+        """
+        logger.info(f"[DETAILS] Procesando detalles del partido {event_id}")
         
+        # 1. Llamadas en paralelo a la API
         stats_data = self.api_client.get_event_stats(event_id)
         lineups_data = self.api_client.get_event_lineups(event_id)
         players_data = self.api_client.get_fixture_players(event_id)
         
+        # 2. Guardar datos procesados
         with self._get_db_session() as session:
             self._process_stats(event_id, stats_data, session)
             self._process_lineups(event_id, lineups_data, session)
             self._process_fixture_players(event_id, players_data, session)
     
     def cleanup_non_priority_data(self) -> Dict[str, int]:
-        """Remove all leagues and fixtures not in the whitelist."""
-        logger.info("[CLEANUP] Removing non-priority data")
+        """
+        Mantenimiento: Elimina de la base de datos local todas las ligas 
+        que ya no están en la lista prioritaria.
+        """
+        logger.info("[CLEANUP] Iniciando limpieza de ligas no prioritarias")
         
         with self._get_db_session() as session:
-            # Find non-whitelisted leagues
+            # Encontrar ligas no permitidas
             stmt = select(League).where(League.id.not_in(self.ALLOWED_LEAGUE_IDS))
             leagues_to_delete = session.exec(stmt).all()
             league_ids = [l.id for l in leagues_to_delete]
             
-            # Delete leagues
+            # Borrar ligas
             for league in leagues_to_delete:
                 session.delete(league)
             
-            # Delete orphaned fixtures
+            # Borrar partidos huérfanos asociados
             if league_ids:
                 fixtures_stmt = select(Fixture).where(Fixture.league_id.in_(league_ids))
                 for fix in session.exec(fixtures_stmt).all():
                     session.delete(fix)
             
-            logger.info(f"[CLEANUP] Removed {len(league_ids)} leagues")
+            logger.info(f"[CLEANUP] Eliminadas {len(league_ids)} ligas de la base de datos")
             return {"removed_leagues": len(league_ids)}
     
     # ═══════════════════════════════════════════════════════
-    # PRIVATE PROCESSING METHODS
+    # PROCESAMIENTO INTERNO (PRIVADO)
     # ═══════════════════════════════════════════════════════
     
     def _sync_fixture_details_batch(self, fixture_ids: List[int], delay: float = 0.5) -> None:
-        """Batch sync fixture details with rate limiting."""
-        logger.info(f"[DETAILS-BATCH] Processing {len(fixture_ids)} fixtures")
+        """
+        Sincroniza detalles por lotes con un pequeño retraso para evitar 
+        bloqueos por límite de peticiones (Rate Limit) de la API.
+        """
+        logger.info(f"[DETAILS-BATCH] Procesando {len(fixture_ids)} partidos")
         
         for i, fid in enumerate(fixture_ids):
             try:
                 self.sync_event_details(fid)
                 if (i + 1) % 50 == 0:
-                    logger.info(f"[DETAILS-BATCH] Progress: {i + 1}/{len(fixture_ids)}")
+                    logger.info(f"[DETAILS-BATCH] Progreso: {i + 1}/{len(fixture_ids)}")
                 time.sleep(delay)
             except Exception as e:
-                logger.warning(f"[DETAILS-BATCH] Fixture {fid} failed: {e}")
+                logger.warning(f"[DETAILS-BATCH] Partido {fid} falló: {e}")
     
     def _process_fixture(self, data: Dict[str, Any], session: Session) -> Optional[Fixture]:
-        """Process and save a single fixture."""
+        """Transforma los datos de un partido para guardarlos en SQLModel."""
         fixture_info = data.get('fixture', {})
         league_info = data.get('league', {})
         teams_info = data.get('teams', {})
@@ -212,12 +264,12 @@ class FootballETL(ISportETL):
         if not fixture_id:
             return None
         
-        # Upsert related entities
+        # Asegurar que las entidades relacionadas (Liga, Equipos) existan en la BD
         league = self._upsert_league(league_info, session)
         home_team = self._upsert_team(teams_info.get('home', {}), session)
         away_team = self._upsert_team(teams_info.get('away', {}), session)
         
-        # Check if fixture exists
+        # "Upsert" de Fixture (si existe lo actualiza, si no lo crea)
         fixture = session.get(Fixture, fixture_id)
         if not fixture:
             fixture = Fixture(
@@ -235,7 +287,7 @@ class FootballETL(ISportETL):
         return fixture
     
     def _upsert_league(self, data: Dict[str, Any], session: Session) -> Optional[League]:
-        """Create or update a league."""
+        """Crea o actualiza una liga en la base de datos."""
         league_id = data.get('id')
         if not league_id:
             return None
@@ -252,7 +304,7 @@ class FootballETL(ISportETL):
         return league
     
     def _upsert_team(self, data: Dict[str, Any], session: Session) -> Optional[Team]:
-        """Create or update a team."""
+        """Crea o actualiza un equipo."""
         team_id = data.get('id')
         if not team_id:
             return None
@@ -268,7 +320,7 @@ class FootballETL(ISportETL):
         return team
     
     def _upsert_player(self, data: Dict[str, Any], team_id: int, session: Session) -> Optional[Player]:
-        """Create or update a player."""
+        """Crea o actualiza un jugador."""
         player_id = data.get('id')
         if not player_id:
             return None
@@ -286,14 +338,14 @@ class FootballETL(ISportETL):
         return player
     
     def _process_league_full(self, data: Dict[str, Any], session: Session) -> None:
-        """Process full league data including type and region."""
+        """Procesa datos completos de una liga (incluyendo logotipo y región)."""
         league_info = data.get('league', {})
         league_id = league_info.get('id')
         
         if not league_id or league_id not in self.ALLOWED_LEAGUE_IDS:
             return
         
-        # Skip if already exists
+        # Si ya existe, no la sobreescribimos para ahorrar recursos
         if session.get(League, league_id):
             return
         
@@ -301,7 +353,7 @@ class FootballETL(ISportETL):
         country_name = country_info.get('name', '')
         region = self._get_region(country_name)
         
-        # Get current season
+        # Determinar la temporada actual
         current_season = 2026
         for s in data.get('seasons', []):
             if s.get('current'):
@@ -320,7 +372,7 @@ class FootballETL(ISportETL):
         session.add(league)
     
     def _process_stats(self, fixture_id: int, stats_data: List, session: Session) -> None:
-        """Process match statistics."""
+        """Procesa y guarda las estadísticas de equipo por partido."""
         for team_stats in stats_data:
             team_info = team_stats.get('team', {})
             statistics = team_stats.get('statistics', [])
@@ -337,25 +389,26 @@ class FootballETL(ISportETL):
                 yellow_cards=stats_dict.get('Yellow Cards', 0),
                 red_cards=stats_dict.get('Red Cards', 0)
             )
+            # Merge: actualiza si existe la clave primaria compuesta (fixture_id + team_id)
             session.merge(team_match_stats)
     
     def _process_lineups(self, fixture_id: int, lineups_data: List, session: Session) -> None:
-        """Process lineup data."""
+        """Procesa alineaciones (Titulares, Suplentes y Entrenador)."""
         for team_lineup in lineups_data:
             team_id = team_lineup.get('team', {}).get('id')
             
-            # Process players (starting XI + subs)
+            # Jugadores titulares y suplentes
             for player_entry in team_lineup.get('startXI', []) + team_lineup.get('substitutes', []):
                 player_info = player_entry.get('player', {})
                 self._upsert_player(player_info, team_id, session)
             
-            # Process coach
+            # Entrenador
             coach_info = team_lineup.get('coach', {})
             if coach_info.get('id') and not session.get(Coach, coach_info.get('id')):
                 session.add(Coach(id=coach_info.get('id'), name=coach_info.get('name', '')))
     
     def _process_fixture_players(self, fixture_id: int, players_data: List, session: Session) -> None:
-        """Process player statistics for a fixture."""
+        """Procesa el rendimiento individual de cada jugador en un partido."""
         for team_data in players_data:
             team_id = team_data.get('team', {}).get('id')
             
@@ -368,6 +421,7 @@ class FootballETL(ISportETL):
                 
                 self._upsert_player(player_info, team_id, session)
                 
+                # Extraer métricas clave del primer bloque de estadísticas
                 stats = stats_list[0]
                 games = stats.get('games', {})
                 shots = stats.get('shots', {})
@@ -393,7 +447,7 @@ class FootballETL(ISportETL):
                 session.merge(player_match_stats)
     
     def _process_injury(self, data: Dict[str, Any], league_id: int, season: int, session: Session) -> None:
-        """Process injury data."""
+        """Guarda información sobre jugadores lesionados o ausentes."""
         player_info = data.get('player', {})
         team_info = data.get('team', {})
         fixture_info = data.get('fixture', {})
@@ -401,6 +455,7 @@ class FootballETL(ISportETL):
         if not player_info.get('id'):
             return
         
+        # Asegurar que existan los registros básicos
         self._upsert_player(player_info, team_info.get('id'), session)
         self._upsert_team(team_info, session)
         
@@ -416,19 +471,19 @@ class FootballETL(ISportETL):
         session.add(injury)
     
     # ═══════════════════════════════════════════════════════
-    # UTILITY METHODS
+    # UTILIDADES DE AYUDA
     # ═══════════════════════════════════════════════════════
     
     def _get_region(self, country: str) -> str:
-        """Map country to region."""
+        """Determina la región/continente según el nombre del país."""
         for region, countries in self.REGION_MAP.items():
             if country in countries:
                 return region
-        return 'Other'
+        return 'Otros'
     
     @staticmethod
     def _parse_int(value) -> int:
-        """Safely parse an integer."""
+        """Parsea un entero de forma segura evitando errores de tipo."""
         try:
             return int(value) if value else 0
         except (ValueError, TypeError):
@@ -436,7 +491,7 @@ class FootballETL(ISportETL):
     
     @staticmethod
     def _parse_float(value) -> float:
-        """Safely parse a float."""
+        """Parsea un número decimal de forma segura."""
         try:
             return float(value) if value else 0.0
         except (ValueError, TypeError):

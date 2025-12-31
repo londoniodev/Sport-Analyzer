@@ -37,11 +37,12 @@ def show_rushbet_view():
         
         # --- FILTERS ---
         with st.expander("🔍 Filtros", expanded=True):
-            f_col1, f_col2 = st.columns(2)
+            f_col1, f_col2, f_col3 = st.columns(3)
             
             # Prepare data for filtering
             df["start_dt"] = pd.to_datetime(df["start_time"])
             unique_teams = sorted(set(df["home_team"].unique()) | set(df["away_team"].unique()))
+            unique_leagues = sorted(df["league"].unique())
             
             with f_col1:
                 # Date filter: show events from this date onwards
@@ -49,12 +50,19 @@ def show_rushbet_view():
                 selected_date = st.date_input("Fecha", value=min_date, min_value=min_date)
             
             with f_col2:
+                # League filter
+                selected_leagues = st.multiselect("Liga", unique_leagues)
+            
+            with f_col3:
                 # Team filter
                 selected_teams = st.multiselect("Equipo", unique_teams)
         
         # Apply Filters
         if selected_date:
             df = df[df["start_dt"].dt.date == selected_date]
+        
+        if selected_leagues:
+            df = df[df["league"].isin(selected_leagues)]
             
         if selected_teams:
             # Filter if either home or away team is in selection
