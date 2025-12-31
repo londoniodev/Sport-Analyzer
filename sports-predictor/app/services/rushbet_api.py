@@ -155,24 +155,47 @@ class RushbetClient:
             return None
     
     def _parse_event_details(self, data: Dict) -> Dict[str, Any]:
-        """Parsea datos completos de un evento incluyendo todos los mercados."""
+        """Parsea datos completos de un evento con categorización detallada."""
         offers = data.get("betOffers", [])
         event_info = data.get("events", [{}])[0] if data.get("events") else {}
+        
+        home_team = event_info.get("homeName", "Local")
+        away_team = event_info.get("awayName", "Visitante")
         
         result = {
             "event_id": event_info.get("id"),
             "name": event_info.get("name"),
-            "home_team": event_info.get("homeName"),
-            "away_team": event_info.get("awayName"),
+            "home_team": home_team,
+            "away_team": away_team,
             "start_time": event_info.get("start"),
             "state": event_info.get("state", "NOT_STARTED"),
             "score": event_info.get("score", {}),
-            "markets": {"principal": [], "goles": [], "handicap": [], "mitades": [], "otros": []}
+            "markets": {
+                # Tab: Partido
+                "tiempo_reglamentario": [],
+                "medio_tiempo": [],
+                "corners": [],
+                "tarjetas_equipo": [],
+                "disparos_equipo": [],
+                "eventos_partido": [],
+                # Tab: Jugadores
+                "goleador": [],
+                "tarjetas_jugador": [],
+                "apuestas_especiales_jugador": [],
+                "asistencias_jugador": [],
+                "goles_jugador": [],
+                "paradas_portero": [],
+                "disparos_jugador": [],
+                # Tab: Handicap
+                "handicap_3way": [],
+                "lineas_asiaticas": []
+            }
         }
         
         for offer in offers:
             if offer.get("suspended"):
                 continue
+            
             criterion = offer.get("criterion", {})
             offer_label = criterion.get("label", offer.get("label", ""))
             outcomes = offer.get("outcomes", [])
@@ -181,24 +204,78 @@ class RushbetClient:
                 "label": out.get("label"),
                 "odds": out.get("odds", 0) / 1000.0,
                 "line": out.get("line"),
-                "type": out.get("type")
+                "type": out.get("type"),
+                "participant": out.get("participant"),
+                "participant_name": out.get("participantName")
             } for out in outcomes]
             
-            market_data = {"label": offer_label, "outcomes": parsed_outcomes}
-            label_lower = offer_label.lower()
+            market_data = {
+                "label": offer_label,
+                "outcomes": parsed_outcomes,
+                "criterion_id": criterion.get("id")
+            }
             
-            if any(x in label_lower for x in ["1x2", "resultado", "ganador", "match winner", "tiempo reglam", "doble oport", "double chance"]):
-                result["markets"]["principal"].append(market_data)
-            elif any(x in label_lower for x in ["más/menos", "over", "under", "goles", "total", "ambos", "btts", "marcan", "exacto"]):
-                result["markets"]["goles"].append(market_data)
-            elif any(x in label_lower for x in ["hándicap", "handicap", "spread"]):
-                result["markets"]["handicap"].append(market_data)
-            elif any(x in label_lower for x in ["1ª mitad", "2ª mitad", "primera mitad", "segunda mitad", "half"]):
-                result["markets"]["mitades"].append(market_data)
-            else:
-                result["markets"]["otros"].append(market_data)
+            # Categorizar el mercado
+            category = self._categorize_market(offer_label, outcomes)
+            if category in result["markets"]:
+                result["markets"][category].append(market_data)
         
         return result
+    
+    def _categorize_market(self, label: str, outcomes: list) -> str:
+        """Categoriza un mercado basado en su label."""
+        label_lower = label.lower()
+        
+        # --- JUGADORES (tienen participantes específicos) ---
+        has_player = any(out.get("participant") or out.get("participantName") for out in outcomes)
+        
+        if has_player or "jugador" in label_lower or "player" in label_lower:
+            if any(x in label_lower for x in ["goleador", "primer gol", "marcará", "anytime scorer", "first goal"]):
+                return "goleador"
+            elif any(x in label_lower for x in ["tarjeta", "card", "booking"]):
+                return "tarjetas_jugador"
+            elif any(x in label_lower for x in ["asistencia", "assist"]):
+                return "asistencias_jugador"
+            elif any(x in label_lower for x in ["parada", "save", "portero", "goalkeeper"]):
+                return "paradas_portero"
+            elif any(x in label_lower for x in ["disparo", "shot", "tiro"]):
+                return "disparos_jugador"
+            elif any(x in label_lower for x in ["gol", "goal", "dos goles", "brace"]):
+                return "goles_jugador"
+            else:
+                return "apuestas_especiales_jugador"
+        
+        # --- HANDICAP ---
+        if any(x in label_lower for x in ["hándicap 3", "handicap 3-way", "handicap 3 way"]):
+            return "handicap_3way"
+        if any(x in label_lower for x in ["asiático", "asian", "ah ", "línea"]):
+            return "lineas_asiaticas"
+        
+        # --- CORNERS ---
+        if any(x in label_lower for x in ["esquina", "corner", "córner"]):
+            return "corners"
+        
+        # --- TARJETAS EQUIPO ---
+        if any(x in label_lower for x in ["tarjeta", "card"]) and "jugador" not in label_lower:
+            return "tarjetas_equipo"
+        
+        # --- DISPAROS EQUIPO ---
+        if any(x in label_lower for x in ["disparo", "shot", "tiro a puerta"]) and "jugador" not in label_lower:
+            return "disparos_equipo"
+        
+        # --- MEDIO TIEMPO (tiene referencias a mitades/partes) ---
+        if any(x in label_lower for x in ["1ª mitad", "2ª mitad", "1° parte", "2° parte", 
+                                           "primera mitad", "segunda mitad", "1st half", "2nd half",
+                                           "descanso", "halftime", "half time"]):
+            return "medio_tiempo"
+        
+        # --- EVENTOS DEL PARTIDO ---
+        if any(x in label_lower for x in ["primer gol", "propia meta", "sin recibir gol", 
+                                           "gana al menos una mitad", "al palo", "clean sheet"]):
+            return "eventos_partido"
+        
+        # --- TIEMPO REGLAMENTARIO (default para mercados principales) ---
+        return "tiempo_reglamentario"
     
     def get_event_statistics(self, event_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene estadísticas del partido (disponible para eventos en vivo)."""

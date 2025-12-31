@@ -1,6 +1,6 @@
 """
 Vista de detalle de partido de Rushbet.
-Muestra mercados de apuestas completos, estadísticas y eventos del partido.
+Muestra mercados de apuestas organizados en pestañas: Partido, Jugadores, Handicap.
 """
 
 import streamlit as st
@@ -10,12 +10,55 @@ from app.services.rushbet_api import RushbetClient
 from app.ui.theme import render_icon
 
 
+# ═══════════════════════════════════════════════════════
+# CONFIGURACIÓN DE CATEGORÍAS Y TABS
+# ═══════════════════════════════════════════════════════
+
+# Estructura de tabs y subcategorías
+TABS_CONFIG = {
+    "Partido": {
+        "tiempo_reglamentario": "Tiempo Reglamentario",
+        "medio_tiempo": "Medio Tiempo",
+        "corners": "Tiros de Esquina",
+        "tarjetas_equipo": "Partido y Tarjetas del Equipo",
+        "disparos_equipo": "Partido y Disparos del Equipo",
+        "eventos_partido": "Eventos del Partido"
+    },
+    "Jugadores": {
+        "goleador": "Goleador",
+        "disparos_jugador": "Disparos a Puerta del Jugador",
+        "tarjetas_jugador": "Tarjetas Jugadores",
+        "apuestas_especiales_jugador": "Apuestas Especiales Jugador",
+        "asistencias_jugador": "Asistencias del Jugador",
+        "goles_jugador": "Goles del Jugador",
+        "paradas_portero": "Paradas del Portero"
+    },
+    "Handicap": {
+        "handicap_3way": "Hándicap 3-Way",
+        "lineas_asiaticas": "Líneas Asiáticas"
+    }
+}
+
+# Mercados que se muestran como cards (pocos outcomes)
+CARD_MARKETS = [
+    "resultado final", "1x2", "doble oportunidad", "ambos equipos",
+    "apuesta sin empate", "descanso", "primer gol", "gol en ambas",
+    "más tarjetas", "más córners", "tarjeta roja", "más tiros"
+]
+
+# Mercados que se muestran como lista/tabla (múltiples líneas)
+LIST_MARKETS = [
+    "total de goles", "más/menos", "over", "under", "resultado correcto",
+    "hándicap", "handicap"
+]
+
+
 def show_match_detail_view():
     """Vista dedicada para mostrar detalles completos de un partido."""
     
-    # Verificar que hay un evento seleccionado
+    # Verificar evento seleccionado
     if "selected_event_id" not in st.session_state or not st.session_state.selected_event_id:
-        st.warning("No hay partido seleccionado. Vuelve a la lista de eventos.")
+        st.warning("No hay partido seleccionado.")
         if st.button("Volver a la lista", icon=":material/arrow_back:"):
             st.session_state.rushbet_view = "list"
             st.rerun()
@@ -25,58 +68,93 @@ def show_match_detail_view():
     event_basic = st.session_state.get("selected_event_data", {})
     
     # Botón de regreso
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        if st.button("Volver", icon=":material/arrow_back:", use_container_width=True):
-            st.session_state.rushbet_view = "list"
-            st.session_state.selected_event_id = None
-            st.rerun()
+    if st.button("Volver", icon=":material/arrow_back:"):
+        st.session_state.rushbet_view = "list"
+        st.session_state.selected_event_id = None
+        st.rerun()
     
-    # Cargar datos detallados
+    # Cargar datos
     client = RushbetClient()
-    
-    with st.spinner("Cargando detalles del partido..."):
+    with st.spinner("Cargando mercados..."):
         details = client.get_event_details(event_id)
         stats = client.get_event_statistics(event_id)
     
     if not details:
-        st.error("No se pudieron cargar los detalles del partido.")
+        st.error("No se pudieron cargar los detalles.")
         return
+    
+    home_team = details.get("home_team", event_basic.get("home_team", "Local"))
+    away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
+    markets = details.get("markets", {})
     
     # ═══════════════════════════════════════════════════════
     # ENCABEZADO DEL PARTIDO
     # ═══════════════════════════════════════════════════════
+    _render_match_header(details, event_basic)
     
+    # ═══════════════════════════════════════════════════════
+    # RESULTADO FINAL DESTACADO
+    # ═══════════════════════════════════════════════════════
+    tiempo_reg = markets.get("tiempo_reglamentario", [])
+    resultado_final = _find_market(tiempo_reg, ["resultado final", "1x2", "tiempo reglamentario"])
+    
+    if resultado_final:
+        _render_resultado_final(resultado_final, home_team, away_team)
+    
+    # ═══════════════════════════════════════════════════════
+    # PESTAÑAS PRINCIPALES
+    # ═══════════════════════════════════════════════════════
+    
+    # Contar mercados por tab para mostrar solo los que tienen datos
+    tabs_with_data = []
+    for tab_name, categories in TABS_CONFIG.items():
+        count = sum(len(markets.get(cat, [])) for cat in categories.keys())
+        if count > 0:
+            tabs_with_data.append((tab_name, categories, count))
+    
+    if not tabs_with_data:
+        st.info("No hay mercados adicionales disponibles.")
+        return
+    
+    tab_labels = [f"{name} ({count})" for name, _, count in tabs_with_data]
+    tabs = st.tabs(tab_labels)
+    
+    for i, tab in enumerate(tabs):
+        tab_name, categories, _ = tabs_with_data[i]
+        
+        with tab:
+            for cat_key, cat_name in categories.items():
+                cat_markets = markets.get(cat_key, [])
+                
+                # Excluir resultado final ya mostrado arriba
+                if cat_key == "tiempo_reglamentario" and resultado_final:
+                    cat_markets = [m for m in cat_markets if m != resultado_final]
+                
+                if cat_markets:
+                    with st.expander(f"**{cat_name}** ({len(cat_markets)})", expanded=False):
+                        _render_category_markets(cat_markets, home_team, away_team)
+
+
+def _render_match_header(details: dict, event_basic: dict):
+    """Renderiza el encabezado del partido."""
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
-    
-    # Estado del partido
     state = details.get("state", "NOT_STARTED")
     score = details.get("score", {})
     
-    state_labels = {
-        "NOT_STARTED": "Próximo",
-        "STARTED": "En Vivo",
-        "FINISHED": "Finalizado"
-    }
-    state_label = state_labels.get(state, state)
+    state_labels = {"NOT_STARTED": "Próximo", "STARTED": "En Vivo", "FINISHED": "Finalizado"}
     
-    # Encabezado con equipos y marcador
     st.markdown("---")
+    cols = st.columns([2, 1, 2])
     
-    header_cols = st.columns([2, 1, 2])
-    
-    with header_cols[0]:
+    with cols[0]:
         st.markdown(f"### {home_team}")
         st.caption("Local")
     
-    with header_cols[1]:
-        if state == "STARTED" or state == "FINISHED":
-            home_score = score.get("home", 0)
-            away_score = score.get("away", 0)
-            st.markdown(f"## {home_score} - {away_score}")
+    with cols[1]:
+        if state in ["STARTED", "FINISHED"]:
+            st.markdown(f"## {score.get('home', 0)} - {score.get('away', 0)}")
         else:
-            # Mostrar hora de inicio
             start_time = details.get("start_time", event_basic.get("start_time"))
             if start_time:
                 try:
@@ -87,252 +165,179 @@ def show_match_detail_view():
             else:
                 st.markdown("## VS")
         
-        # Badge de estado
         if state == "STARTED":
-            st.markdown(f"<span style='background-color: #22c55e; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px;'>{state_label}</span>", unsafe_allow_html=True)
+            st.markdown("<span style='background:#22c55e;color:white;padding:4px 12px;border-radius:12px;font-size:12px;'>EN VIVO</span>", unsafe_allow_html=True)
         else:
-            st.caption(state_label)
+            st.caption(state_labels.get(state, state))
     
-    with header_cols[2]:
+    with cols[2]:
         st.markdown(f"### {away_team}")
         st.caption("Visitante")
     
     st.markdown("---")
-    
-    # ═══════════════════════════════════════════════════════
-    # RESULTADO FINAL - SECCIÓN DESTACADA
-    # ═══════════════════════════════════════════════════════
-    
-    markets = details.get("markets", {})
-    principal_markets = markets.get("principal", [])
-    
-    # Buscar el mercado de Resultado Final / 1X2
-    resultado_final = None
-    for market in principal_markets:
+
+
+def _find_market(markets: list, patterns: list) -> dict:
+    """Busca un mercado que coincida con los patrones."""
+    for market in markets:
         label_lower = market.get("label", "").lower()
-        if any(x in label_lower for x in ["resultado final", "1x2", "tiempo reglam", "ganador"]):
-            resultado_final = market
-            break
+        if any(p in label_lower for p in patterns):
+            return market
+    return None
+
+
+def _render_resultado_final(market: dict, home_team: str, away_team: str):
+    """Renderiza el mercado de resultado final destacado."""
+    st.markdown("### Resultado Final")
     
-    if resultado_final:
-        st.markdown("### Resultado Final")
-        
-        outcomes = resultado_final.get("outcomes", [])
-        if len(outcomes) >= 3:
-            cols = st.columns(3)
-            
-            # Mapear 1, X, 2 a nombres dinámicos
-            label_map = {
-                "1": home_team,
-                "X": "Empate",
-                "2": away_team
-            }
-            
-            for i, outcome in enumerate(outcomes):
-                with cols[i]:
-                    odds = outcome.get("odds", 0)
-                    out_label = outcome.get("label", "")
-                    
-                    # Usar nombre dinámico si es 1, X, o 2
-                    display_label = label_map.get(out_label, out_label)
-                    
-                    # Colores según posición
-                    colors = ["#3b82f6", "#eab308", "#ef4444"]  # Azul, Amarillo, Rojo
-                    
-                    st.markdown(f"""
-                    <div style="
-                        background: linear-gradient(135deg, #1e3a5f 0%, #0f2944 100%);
-                        border: 2px solid {colors[i]};
-                        border-radius: 12px;
-                        padding: 16px;
-                        text-align: center;
-                    ">
-                        <div style="color: #e2e8f0; font-size: 14px; font-weight: 500; margin-bottom: 8px;">{display_label}</div>
-                        <div style="color: {colors[i]}; font-size: 28px; font-weight: bold;">{odds:.2f}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        st.markdown("")
-    
-    # ═══════════════════════════════════════════════════════
-    # TABS DE OTROS MERCADOS
-    # ═══════════════════════════════════════════════════════
-    
-    # Contar mercados por categoría (excluyendo resultado final ya mostrado)
-    tab_labels = []
-    tab_data = []
-    
-    category_names = {
-        "principal": "Principal",
-        "goles": "Goles",
-        "handicap": "Hándicap", 
-        "mitades": "Mitades",
-        "otros": "Otros"
-    }
-    
-    for key, name in category_names.items():
-        market_list = markets.get(key, [])
-        
-        # Para principal, filtrar el resultado final ya mostrado
-        if key == "principal" and resultado_final:
-            market_list = [m for m in market_list if m != resultado_final]
-        
-        if market_list:
-            tab_labels.append(f"{name} ({len(market_list)})")
-            tab_data.append((key, market_list, home_team, away_team))
-    
-    # Agregar tab de estadísticas si hay datos
-    if stats and (stats.get("stats") or stats.get("events")):
-        tab_labels.append("Estadísticas")
-        tab_data.append(("stats", stats, home_team, away_team))
-    
-    if not tab_labels:
+    outcomes = market.get("outcomes", [])
+    if len(outcomes) < 3:
         return
     
-    tabs = st.tabs(tab_labels)
+    cols = st.columns(3)
+    label_map = {"1": home_team, "X": "Empate", "2": away_team}
+    colors = ["#3b82f6", "#eab308", "#ef4444"]
     
-    for i, tab in enumerate(tabs):
-        with tab:
-            key, data, h_team, a_team = tab_data[i]
+    for i, outcome in enumerate(outcomes[:3]):
+        with cols[i]:
+            odds = outcome.get("odds", 0)
+            out_label = outcome.get("label", "")
+            display_label = label_map.get(out_label, out_label)
             
-            if key == "stats":
-                _render_statistics(data)
-            else:
-                _render_markets(data, h_team, a_team)
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#1e3a5f,#0f2944);border:2px solid {colors[i]};border-radius:12px;padding:16px;text-align:center;">
+                <div style="color:#e2e8f0;font-size:14px;font-weight:500;margin-bottom:8px;">{display_label}</div>
+                <div style="color:{colors[i]};font-size:28px;font-weight:bold;">{odds:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("")
 
 
-def _render_markets(markets_list: list, home_team: str = "", away_team: str = ""):
-    """Renderiza una lista de mercados de apuestas."""
+def _render_category_markets(markets: list, home_team: str, away_team: str):
+    """Renderiza los mercados de una categoría."""
     
-    # Mapeo de labels genéricos a nombres dinámicos
-    label_map = {
-        "1": home_team if home_team else "1",
-        "X": "Empate",
-        "2": away_team if away_team else "2"
-    }
+    label_map = {"1": home_team, "X": "Empate", "2": away_team}
     
-    for market in markets_list:
+    for market in markets:
         label = market.get("label", "Mercado")
         outcomes = market.get("outcomes", [])
         
         if not outcomes:
             continue
         
-        with st.expander(f"**{label}**", expanded=True):
-            # Crear columnas según cantidad de outcomes
-            cols = st.columns(len(outcomes))
+        label_lower = label.lower()
+        
+        # Determinar formato: card o lista
+        is_list = any(p in label_lower for p in LIST_MARKETS) or len(outcomes) > 4
+        
+        if is_list:
+            _render_as_list(label, outcomes, label_map)
+        else:
+            _render_as_card(label, outcomes, label_map)
+
+
+def _render_as_card(label: str, outcomes: list, label_map: dict):
+    """Renderiza mercado como cards horizontales."""
+    st.markdown(f"**{label}**")
+    
+    cols = st.columns(len(outcomes))
+    for i, outcome in enumerate(outcomes):
+        with cols[i]:
+            odds = outcome.get("odds", 0)
+            out_label = outcome.get("label", "")
+            line = outcome.get("line")
             
-            for j, outcome in enumerate(outcomes):
-                with cols[j]:
-                    odds = outcome.get("odds", 0)
-                    out_label = outcome.get("label", "")
-                    line = outcome.get("line")
-                    
-                    # Usar nombre dinámico si es 1, X, o 2
-                    display_label = label_map.get(out_label, out_label)
-                    if line:
-                        display_label = f"{display_label} ({line})"
-                    
-                    # Estilo de botón con cuota
-                    st.markdown(f"""
-                    <div style="
-                        background: linear-gradient(135deg, #1e3a5f 0%, #0f2944 100%);
-                        border: 1px solid #2d5a87;
-                        border-radius: 8px;
-                        padding: 12px;
-                        text-align: center;
-                        margin: 4px 0;
-                    ">
-                        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">{display_label}</div>
-                        <div style="color: #22c55e; font-size: 20px; font-weight: bold;">{odds:.2f}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            display_label = label_map.get(out_label, out_label)
+            if line:
+                display_label = f"{display_label} ({line})"
+            
+            st.markdown(f"""
+            <div style="background:#1e3a5f;border:1px solid #2d5a87;border-radius:8px;padding:10px;text-align:center;margin:2px;">
+                <div style="color:#94a3b8;font-size:11px;">{display_label}</div>
+                <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("")
+
+
+def _render_as_list(label: str, outcomes: list, label_map: dict):
+    """Renderiza mercado como tabla/lista."""
+    st.markdown(f"**{label}**")
+    
+    # Agrupar por línea si existe
+    has_lines = any(out.get("line") for out in outcomes)
+    
+    if has_lines:
+        # Agrupar outcomes por línea
+        lines_data = {}
+        for out in outcomes:
+            line = out.get("line", "")
+            if line not in lines_data:
+                lines_data[line] = {}
+            
+            out_label = out.get("label", "")
+            lines_data[line][out_label] = out.get("odds", 0)
+        
+        # Crear DataFrame
+        rows = []
+        for line, odds_dict in sorted(lines_data.items(), key=lambda x: float(x[0]) if x[0] else 0):
+            row = {"Línea": line}
+            for k, v in odds_dict.items():
+                display_k = label_map.get(k, k)
+                row[display_k] = f"{v:.2f}" if v else "-"
+            rows.append(row)
+        
+        if rows:
+            df = pd.DataFrame(rows)
+            st.dataframe(df, hide_index=True, use_container_width=True)
+    else:
+        # Lista simple
+        cols = st.columns(min(len(outcomes), 6))
+        for i, out in enumerate(outcomes):
+            with cols[i % len(cols)]:
+                odds = out.get("odds", 0)
+                out_label = out.get("label", "")
+                display_label = label_map.get(out_label, out_label)
+                
+                st.markdown(f"""
+                <div style="background:#1e3a5f;border:1px solid #2d5a87;border-radius:6px;padding:8px;text-align:center;margin:2px;">
+                    <div style="color:#94a3b8;font-size:10px;">{display_label}</div>
+                    <div style="color:#22c55e;font-size:16px;font-weight:bold;">{odds:.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    st.markdown("")
 
 
 def _render_statistics(stats_data: dict):
-    """Renderiza estadísticas y eventos del partido."""
-    
+    """Renderiza estadísticas del partido."""
     stats = stats_data.get("stats", {})
     events = stats_data.get("events", [])
     
     if not stats and not events:
-        st.info("No hay estadísticas disponibles para este partido.")
+        st.info("No hay estadísticas disponibles.")
         return
     
-    # Estadísticas en dos columnas
     if stats:
-        st.markdown("### Estadísticas del Partido")
-        
+        st.markdown("### Estadísticas")
         for stat_name, values in stats.items():
             home_val = values.get("home", 0)
             away_val = values.get("away", 0)
-            
-            # Calcular porcentajes para barras
             total = (home_val or 0) + (away_val or 0)
-            if total > 0:
-                home_pct = (home_val or 0) / total * 100
-                away_pct = (away_val or 0) / total * 100
-            else:
-                home_pct = away_pct = 50
+            home_pct = (home_val or 0) / total * 100 if total > 0 else 50
             
             cols = st.columns([1, 2, 1])
-            
             with cols[0]:
                 st.markdown(f"**{home_val}**")
-            
             with cols[1]:
                 st.caption(stat_name)
-                # Barra de progreso dual
                 st.markdown(f"""
-                <div style="display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: #1e293b;">
-                    <div style="width: {home_pct}%; background: #3b82f6;"></div>
-                    <div style="width: {away_pct}%; background: #ef4444;"></div>
+                <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#1e293b;">
+                    <div style="width:{home_pct}%;background:#3b82f6;"></div>
+                    <div style="width:{100-home_pct}%;background:#ef4444;"></div>
                 </div>
                 """, unsafe_allow_html=True)
-            
             with cols[2]:
                 st.markdown(f"**{away_val}**")
-    
-    # Timeline de eventos
-    if events:
-        st.markdown("### Eventos del Partido")
-        
-        event_icons = {
-            "GOAL": "⚽",
-            "YELLOW_CARD": "🟨",
-            "RED_CARD": "🟥",
-            "SUBSTITUTION": "🔄",
-            "PENALTY": "🎯"
-        }
-        
-        for event in events:
-            event_type = event.get("type", "")
-            team = event.get("team", "")
-            player = event.get("player", "")
-            minute = event.get("minute", "")
-            extra = event.get("extra_minute")
-            
-            icon = event_icons.get(event_type, "📋")
-            time_str = f"{minute}'" if minute else ""
-            if extra:
-                time_str = f"{minute}+{extra}'"
-            
-            alignment = "flex-start" if team == "HOME" else "flex-end"
-            bg_color = "#1e3a5f" if team == "HOME" else "#3a1e2f"
-            
-            st.markdown(f"""
-            <div style="display: flex; justify-content: {alignment}; margin: 8px 0;">
-                <div style="
-                    background: {bg_color};
-                    padding: 8px 16px;
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                ">
-                    <span style="font-size: 20px;">{icon}</span>
-                    <span style="color: #e2e8f0;">{player}</span>
-                    <span style="color: #94a3b8; font-size: 12px;">{time_str}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
