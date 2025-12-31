@@ -1,6 +1,6 @@
 """
 Vista de detalle de partido de Rushbet.
-Muestra mercados de apuestas organizados en pestañas: Partido, Jugadores, Handicap.
+Muestra mercados de apuestas organizados según especificación exacta.
 """
 
 import streamlit as st
@@ -11,54 +11,142 @@ from app.ui.theme import render_icon
 
 
 # ═══════════════════════════════════════════════════════
-# ORDEN DE MERCADOS POR CATEGORÍA (según especificación)
+# ORDEN EXACTO DE MERCADOS POR CATEGORÍA
 # ═══════════════════════════════════════════════════════
 
-# Orden específico dentro de Tiempo Reglamentario
-TIEMPO_REG_ORDER = [
-    "resultado final", "1x2", "tiempo reglamentario",
-    "total de goles",
-    "doble oportunidad",
-    "ambos equipos marcarán", "ambos equipos", "btts",
-    "resultado correcto", "marcador correcto",
-    "apuesta sin empate",
-    "total de goles de", "total goles",  # Para Local/Visitante
-    "descanso/tiempo", "medio tiempo/final",
-    "hándicap", "handicap",
-    "victoria de", "y ambos equipos marcarán",
-    "gol en ambas mitades"
+# Orden dentro de Tiempo Reglamentario
+ORDEN_TIEMPO_REG = [
+    ("resultado final", "card"),
+    ("1x2", "card"),
+    ("tiempo reglamentario", "card"),
+    ("total de goles", "list"),
+    ("doble oportunidad", "card"),
+    ("ambos equipos marcarán", "card"),
+    ("ambos equipos", "card"),
+    ("resultado correcto", "list"),
+    ("marcador correcto", "list"),
+    ("apuesta sin empate", "card"),
+    ("total de goles de", "list"),  # Local/Visitante
+    ("descanso/tiempo", "list"),
+    ("medio tiempo/final", "list"),
+    ("hándicap", "list"),
+    ("handicap", "list"),
+    ("victoria de", "card"),  # Victoria de X y ambos marcan
+    ("y ambos equipos marcarán", "card"),
+    ("gol en ambas mitades", "card"),
 ]
 
-# Estructura de tabs y subcategorías
+# Orden dentro de Medio Tiempo
+ORDEN_MEDIO_TIEMPO = [
+    ("descanso", "card"),
+    ("1° parte", "card"),
+    ("1ª parte", "card"),
+    ("apuesta sin empate", "card"),
+    ("doble oportunidad", "card"),
+    ("ambos equipos marcarán", "card"),
+    ("total de goles", "list"),
+    ("total de goles de", "list"),
+    ("resultado correcto", "list"),
+    ("2° parte", "card"),
+    ("2ª parte", "card"),
+]
+
+# Orden dentro de Tiros de Esquina
+ORDEN_CORNERS = [
+    ("total de tiros de esquina", "list"),
+    ("total de esquina", "list"),
+    ("esquina a favor de", "list"),
+    ("más tiros de esquina", "card"),
+    ("mas tiros de esquina", "card"),
+    ("más córners", "card"),
+    ("hándicap de tiros de esquina", "list"),
+    ("handicap de esquina", "list"),
+    ("siguiente tiro de esquina", "card"),
+]
+
+# Orden dentro de Tarjetas Equipo
+ORDEN_TARJETAS = [
+    ("total de tarjetas", "list"),
+    ("total de tarjeta", "list"),
+    ("tarjeta roja mostrada", "card"),
+    ("tarjeta roja a", "card"),
+    ("más tarjetas", "card"),
+    ("tarjetas hándicap", "list"),
+]
+
+# Orden dentro de Disparos Equipo
+ORDEN_DISPAROS = [
+    ("número total de disparos", "list"),
+    ("número total de tiros", "list"),
+    ("tiros a puerta", "list"),
+    ("más tiros a puerta", "card"),
+    ("mas tiros a puerta", "card"),
+]
+
+# Orden Eventos del Partido
+ORDEN_EVENTOS = [
+    ("primer gol", "card"),
+    ("propia meta", "card"),
+    ("sin recibir goles", "card"),
+    ("gana al menos una mitad", "card"),
+    ("al palo", "card"),
+]
+
+# Orden Handicap 3-Way
+ORDEN_HANDICAP_3WAY = [
+    ("hándicap 3-way", "list"),
+    ("handicap 3-way", "list"),
+    ("hándicap 3", "list"),
+]
+
+# Orden Líneas Asiáticas
+ORDEN_ASIATICAS = [
+    ("hándicap asiático", "list"),
+    ("handicap asiático", "list"),
+    ("total asiático", "list"),
+]
+
+# Mapeo de categoría a orden
+ORDEN_POR_CATEGORIA = {
+    "tiempo_reglamentario": ORDEN_TIEMPO_REG,
+    "medio_tiempo": ORDEN_MEDIO_TIEMPO,
+    "corners": ORDEN_CORNERS,
+    "tarjetas_equipo": ORDEN_TARJETAS,
+    "disparos_equipo": ORDEN_DISPAROS,
+    "eventos_partido": ORDEN_EVENTOS,
+    "handicap_3way": ORDEN_HANDICAP_3WAY,
+    "lineas_asiaticas": ORDEN_ASIATICAS,
+}
+
+# Estructura de tabs
 TABS_CONFIG = {
-    "Partido": {
-        "tiempo_reglamentario": "Tiempo Reglamentario",
-        "medio_tiempo": "Medio Tiempo",
-        "corners": "Tiros de Esquina",
-        "tarjetas_equipo": "Partido y Tarjetas del Equipo",
-        "disparos_equipo": "Partido y Disparos del Equipo",
-        "eventos_partido": "Eventos del Partido"
-    },
-    "Jugadores": {
-        "disparos_jugador": "Disparos a Puerta del Jugador",
-        "goleador": "Goleador",
-        "tarjetas_jugador": "Tarjetas Jugadores",
-        "apuestas_especiales_jugador": "Apuestas Especiales Jugador",
-        "asistencias_jugador": "Asistencias del Jugador",
-        "goles_jugador": "Goles del Jugador",
-        "paradas_portero": "Paradas del Portero"
-    },
-    "Handicap": {
-        "handicap_3way": "Hándicap 3-Way",
-        "lineas_asiaticas": "Líneas Asiáticas"
-    }
+    "Partido": ["tiempo_reglamentario", "medio_tiempo", "corners", "tarjetas_equipo", "disparos_equipo", "eventos_partido"],
+    "Jugadores": ["disparos_jugador", "goleador", "tarjetas_jugador", "apuestas_especiales_jugador", "asistencias_jugador", "goles_jugador", "paradas_portero"],
+    "Handicap": ["handicap_3way", "lineas_asiaticas"]
+}
+
+NOMBRES_CATEGORIAS = {
+    "tiempo_reglamentario": "Tiempo Reglamentario",
+    "medio_tiempo": "Medio Tiempo",
+    "corners": "Tiros de Esquina",
+    "tarjetas_equipo": "Partido y Tarjetas del Equipo",
+    "disparos_equipo": "Partido y Disparos del Equipo",
+    "eventos_partido": "Eventos del Partido",
+    "disparos_jugador": "Disparos a Puerta del Jugador",
+    "goleador": "Goleador",
+    "tarjetas_jugador": "Tarjetas Jugadores",
+    "apuestas_especiales_jugador": "Apuestas Especiales Jugador",
+    "asistencias_jugador": "Asistencias del Jugador",
+    "goles_jugador": "Goles del Jugador",
+    "paradas_portero": "Paradas del Portero",
+    "handicap_3way": "Hándicap 3-Way",
+    "lineas_asiaticas": "Líneas Asiáticas"
 }
 
 
 def show_match_detail_view():
     """Vista dedicada para mostrar detalles completos de un partido."""
     
-    # Verificar evento seleccionado
     if "selected_event_id" not in st.session_state or not st.session_state.selected_event_id:
         st.warning("No hay partido seleccionado.")
         if st.button("Volver a la lista", icon=":material/arrow_back:"):
@@ -69,17 +157,14 @@ def show_match_detail_view():
     event_id = st.session_state.selected_event_id
     event_basic = st.session_state.get("selected_event_data", {})
     
-    # Botón de regreso
     if st.button("Volver", icon=":material/arrow_back:"):
         st.session_state.rushbet_view = "list"
         st.session_state.selected_event_id = None
         st.rerun()
     
-    # Cargar datos
     client = RushbetClient()
     with st.spinner("Cargando mercados..."):
         details = client.get_event_details(event_id)
-        stats = client.get_event_statistics(event_id)
     
     if not details:
         st.error("No se pudieron cargar los detalles.")
@@ -89,20 +174,20 @@ def show_match_detail_view():
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
     markets = details.get("markets", {})
     
-    # Encabezado del partido
+    # Encabezado
     _render_match_header(details, event_basic)
     
-    # Resultado Final destacado (siempre primero)
+    # Resultado Final destacado
     tiempo_reg = markets.get("tiempo_reglamentario", [])
-    resultado_final = _find_market(tiempo_reg, ["resultado final", "1x2", "tiempo reglamentario"])
+    resultado_final = _find_market(tiempo_reg, ["resultado final", "1x2"])
     
     if resultado_final:
         _render_resultado_final(resultado_final, home_team, away_team)
     
-    # Pestañas principales
+    # Pestañas
     tabs_with_data = []
     for tab_name, categories in TABS_CONFIG.items():
-        count = sum(len(markets.get(cat, [])) for cat in categories.keys())
+        count = sum(len(markets.get(cat, [])) for cat in categories)
         if count > 0:
             tabs_with_data.append((tab_name, categories, count))
     
@@ -117,32 +202,43 @@ def show_match_detail_view():
         tab_name, categories, _ = tabs_with_data[i]
         
         with tab:
-            for cat_key, cat_name in categories.items():
+            for cat_key in categories:
                 cat_markets = markets.get(cat_key, [])
                 
                 # Excluir resultado final ya mostrado
                 if cat_key == "tiempo_reglamentario" and resultado_final:
                     cat_markets = [m for m in cat_markets if m != resultado_final]
                 
-                # Ordenar mercados según el orden definido
-                if cat_key == "tiempo_reglamentario":
-                    cat_markets = _sort_markets(cat_markets, TIEMPO_REG_ORDER)
+                # Ordenar según especificación
+                orden = ORDEN_POR_CATEGORIA.get(cat_key)
+                if orden:
+                    cat_markets = _sort_markets_by_order(cat_markets, orden)
                 
                 if cat_markets:
+                    cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
                     with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
-                        _render_category_markets(cat_markets, home_team, away_team)
+                        _render_category_markets(cat_markets, home_team, away_team, orden)
 
 
-def _sort_markets(markets: list, order: list) -> list:
-    """Ordena mercados según una lista de prioridad."""
+def _sort_markets_by_order(markets: list, orden: list) -> list:
+    """Ordena mercados según lista de patrones."""
     def get_priority(market):
         label_lower = market.get("label", "").lower()
-        for i, pattern in enumerate(order):
+        for i, (pattern, _) in enumerate(orden):
             if pattern in label_lower:
                 return i
-        return 999  # Al final si no coincide
+        return 999
     
     return sorted(markets, key=get_priority)
+
+
+def _get_market_format(label: str, orden: list) -> str:
+    """Determina si el mercado es card o list según el orden."""
+    label_lower = label.lower()
+    for pattern, formato in orden:
+        if pattern in label_lower:
+            return formato
+    return "card"
 
 
 def _render_match_header(details: dict, event_basic: dict):
@@ -224,7 +320,7 @@ def _render_resultado_final(market: dict, home_team: str, away_team: str):
     st.markdown("")
 
 
-def _render_category_markets(markets: list, home_team: str, away_team: str):
+def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
     """Renderiza los mercados de una categoría."""
     
     label_map = {"1": home_team, "X": "Empate", "2": away_team}
@@ -236,10 +332,14 @@ def _render_category_markets(markets: list, home_team: str, away_team: str):
         if not outcomes:
             continue
         
-        # Determinar si es lista o card
-        label_lower = label.lower()
+        # Determinar formato
         has_lines = any(out.get("line") for out in outcomes)
-        is_list = has_lines or len(outcomes) > 4 or any(p in label_lower for p in ["total", "más/menos", "hándicap", "handicap", "resultado correcto"])
+        
+        if orden:
+            formato = _get_market_format(label, orden)
+            is_list = formato == "list" or has_lines
+        else:
+            is_list = has_lines or len(outcomes) > 4
         
         if is_list:
             _render_as_list(label, outcomes, label_map)
@@ -249,7 +349,7 @@ def _render_category_markets(markets: list, home_team: str, away_team: str):
 
 def _render_as_card(label: str, outcomes: list, label_map: dict):
     """Renderiza mercado como cards horizontales."""
-    st.markdown(f"<p style='margin-bottom:4px;'><b>{label}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
     
     n_cols = min(len(outcomes), 4)
     cols = st.columns(n_cols)
@@ -276,18 +376,22 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
 
 def _render_as_list(label: str, outcomes: list, label_map: dict):
     """Renderiza mercado como tabla con todas las líneas."""
-    st.markdown(f"<p style='margin-bottom:4px;'><b>{label}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
     
     has_lines = any(out.get("line") for out in outcomes)
     
     if has_lines:
-        # Agrupar outcomes por línea
+        # Agrupar por línea
         lines_data = {}
         for out in outcomes:
             line = out.get("line")
             if line is None:
                 line = ""
-            line_key = float(line) if line else 0
+            
+            try:
+                line_key = float(line) if line else 0
+            except:
+                line_key = 0
             
             if line_key not in lines_data:
                 lines_data[line_key] = {"Línea": line}
@@ -296,20 +400,19 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             display_label = label_map.get(out_label, out_label)
             lines_data[line_key][display_label] = out.get("odds", 0)
         
-        # Crear DataFrame ordenado por línea
+        # Crear DataFrame con TODAS las líneas
         rows = [lines_data[k] for k in sorted(lines_data.keys())]
         
         if rows:
             df = pd.DataFrame(rows)
             
-            # Formatear columnas numéricas
             for col in df.columns:
                 if col != "Línea":
                     df[col] = df[col].apply(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) and x > 0 else "-")
             
             st.dataframe(df, hide_index=True, use_container_width=True)
     else:
-        # Sin líneas, mostrar como grid
+        # Sin líneas - grid de cards
         n_cols = min(len(outcomes), 4)
         cols = st.columns(n_cols)
         

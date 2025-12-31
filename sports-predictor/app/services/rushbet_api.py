@@ -226,6 +226,15 @@ class RushbetClient:
         """Categoriza un mercado basado en su label."""
         label_lower = label.lower()
         
+        # --- MEDIO TIEMPO (PRIMERO - tiene referencias a mitades/partes) ---
+        # Esto debe ir primero para no mezclarse con tiempo_reglamentario
+        if any(x in label_lower for x in ["1ª mitad", "2ª mitad", "1° mitad", "2° mitad",
+                                           "1ª parte", "2ª parte", "1° parte", "2° parte",
+                                           "primera mitad", "segunda mitad", 
+                                           "1st half", "2nd half",
+                                           "- 1ª", "- 2ª", "- 1°", "- 2°"]):
+            return "medio_tiempo"
+        
         # --- JUGADORES (tienen participantes específicos) ---
         has_player = any(out.get("participant") or out.get("participantName") for out in outcomes)
         
@@ -248,7 +257,7 @@ class RushbetClient:
         # --- HANDICAP ---
         if any(x in label_lower for x in ["hándicap 3", "handicap 3-way", "handicap 3 way"]):
             return "handicap_3way"
-        if any(x in label_lower for x in ["asiático", "asian", "ah ", "línea"]):
+        if any(x in label_lower for x in ["asiático", "asian", "ah ", "línea asiática"]):
             return "lineas_asiaticas"
         
         # --- CORNERS ---
@@ -260,21 +269,15 @@ class RushbetClient:
             return "tarjetas_equipo"
         
         # --- DISPAROS EQUIPO ---
-        if any(x in label_lower for x in ["disparo", "shot", "tiro a puerta"]) and "jugador" not in label_lower:
+        if any(x in label_lower for x in ["disparo", "shot", "tiros a puerta"]) and "jugador" not in label_lower:
             return "disparos_equipo"
-        
-        # --- MEDIO TIEMPO (tiene referencias a mitades/partes) ---
-        if any(x in label_lower for x in ["1ª mitad", "2ª mitad", "1° parte", "2° parte", 
-                                           "primera mitad", "segunda mitad", "1st half", "2nd half",
-                                           "descanso", "halftime", "half time"]):
-            return "medio_tiempo"
         
         # --- EVENTOS DEL PARTIDO ---
         if any(x in label_lower for x in ["primer gol", "propia meta", "sin recibir gol", 
                                            "gana al menos una mitad", "al palo", "clean sheet"]):
             return "eventos_partido"
         
-        # --- TIEMPO REGLAMENTARIO (default para mercados principales) ---
+        # --- TIEMPO REGLAMENTARIO (default - mercados sin mitades) ---
         return "tiempo_reglamentario"
     
     def get_event_statistics(self, event_id: int) -> Optional[Dict[str, Any]]:
