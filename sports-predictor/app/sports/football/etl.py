@@ -14,6 +14,10 @@ from app.sports.football.api_client import FootballAPIClient
 from app.sports.football.models import (
     League, Team, Player, Coach, Fixture, TeamMatchStats, PlayerMatchStats, Injury
 )
+# Configuración de ligas centralizada - editar league_config.py para agregar/quitar ligas
+from app.sports.football.league_config import (
+    PRIORITY_LEAGUES, ALLOWED_LEAGUE_IDS, REGION_MAP, get_region
+)
 
 # Configuración del sistema de logs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -23,54 +27,8 @@ logger = logging.getLogger(__name__)
 class FootballETL(ISportETL):
     """Motor de ETL para datos de fútbol."""
     
-    # ═══════════════════════════════════════════════════════
-    # CONFIGURACIÓN DE LIGAS Y FILTROS
-    # ═══════════════════════════════════════════════════════
-    
-    # Ligas prioritarias organizadas por nivel (Tier).
-    # Solo procesamos datos detallados para estas ligas para optimizar costos de API y espacio.
-    PRIORITY_LEAGUES = {
-        "TIER_1": [2, 13, 39, 140, 135, 78, 61, 239],      # Champions, Libertadores, Premier, LaLiga, BetPlay
-        "TIER_2": [3, 40, 71, 253, 262, 94, 88, 11, 128],  # Europa League, Brasileirao, MLS, etc.
-        "INTERNATIONAL": [1, 4, 9, 37]                      # Mundial, Eurocopa, Copa América, etc.
-    }
-    
-    # Conjunto de IDs permitidos para búsquedas rápidas (O(1))
-    ALLOWED_LEAGUE_IDS = set(
-        league_id 
-        for tier in PRIORITY_LEAGUES.values() 
-        for league_id in tier
-    )
-    
-    # Mapeo de países a regiones para facilitar filtros en la UI
-    # Usamos nombres en inglés para que coincidan con los datos de API-Sports.
-    REGION_MAP = {
-        'Europa': [
-            'England', 'Spain', 'Italy', 'Germany', 'France', 'Portugal', 'Netherlands', 
-            'Austria', 'Belgium', 'Croatia', 'Scotland', 'Norway', 'Switzerland',
-            'Poland', 'Wales', 'Estonia', 'Denmark', 'Ukraine', 'Israel', 'Iceland',
-            'Sweden', 'Turkey', 'Greece', 'Georgia', 'Serbia', 'Hungary', 
-            'Czech Republic', 'Slovakia'
-        ],
-        'Sudamérica': [
-            'Brazil', 'Argentina', 'Colombia', 'Ecuador', 'Paraguay', 'Uruguay', 'Bolivia'
-        ],
-        'Norteamérica': [
-            'USA', 'Mexico', 'Canada', 'Curacao', 'Haiti', 'Panama', 'Costa Rica', 'Jamaica'
-        ],
-        'África': [
-            'Algeria', 'Cape Verde', 'Ivory Coast', 'Egypt', 'Ghana', 'Morocco', 
-            'Senegal', 'South Africa', 'Tunisia', 'Mali'
-        ],
-        'Asia': [
-            'Saudi Arabia', 'Australia', 'South Korea', 'Iran', 'Japan', 'Jordan', 
-            'Qatar', 'Uzbekistan', 'Iraq'
-        ],
-        'Oceanía': [
-            'New Zealand', 'Solomon Islands'
-        ],
-        'Internacional': ['World']
-    }
+    # La configuración de ligas ahora está en league_config.py
+    # Para agregar/quitar ligas, editar ese archivo directamente.
     
     def __init__(self):
         # Cliente encargado de las peticiones HTTP a la API
@@ -133,7 +91,7 @@ class FootballETL(ISportETL):
     
     def sync_priority_leagues(self, season: int = 2026, sync_details: bool = False) -> Dict[str, int]:
         """Sincroniza automáticamente todas las ligas de la lista 'whitelist'."""
-        all_ids = list(self.ALLOWED_LEAGUE_IDS)
+        all_ids = list(ALLOWED_LEAGUE_IDS)
         logger.info(f"[BATCH] Sincronizando {len(all_ids)} ligas prioritarias")
         
         results = {"success": 0, "error": 0, "total": len(all_ids)}
@@ -165,7 +123,7 @@ class FootballETL(ISportETL):
         with self._get_db_session() as session:
             for league_data in leagues_data:
                 league_id = league_data.get('league', {}).get('id')
-                if league_id in self.ALLOWED_LEAGUE_IDS:
+                if league_id in ALLOWED_LEAGUE_IDS:
                     self._process_league_full(league_data, session)
                     count += 1
         
@@ -216,7 +174,7 @@ class FootballETL(ISportETL):
         
         with self._get_db_session() as session:
             # Encontrar ligas no permitidas
-            stmt = select(League).where(League.id.not_in(self.ALLOWED_LEAGUE_IDS))
+            stmt = select(League).where(League.id.not_in(ALLOWED_LEAGUE_IDS))
             leagues_to_delete = session.exec(stmt).all()
             league_ids = [l.id for l in leagues_to_delete]
             
@@ -279,8 +237,7 @@ class FootballETL(ISportETL):
                 home_team_id=home_team.id if home_team else None,
                 away_team_id=away_team.id if away_team else None,
                 home_score=goals_info.get('home'),
-                away_score=goals_info.get('away'),
-                referee_name=fixture_info.get('referee')
+                away_score=goals_info.get('away')
             )
             session.add(fixture)
         
@@ -313,8 +270,7 @@ class FootballETL(ISportETL):
         if not team:
             team = Team(
                 id=team_id,
-                name=data.get('name', ''),
-                logo_url=data.get('logo')
+                name=data.get('name', '')
             )
             session.add(team)
         return team
@@ -331,8 +287,7 @@ class FootballETL(ISportETL):
                 id=player_id,
                 name=data.get('name', ''),
                 position=data.get('pos') or data.get('position'),
-                team_id=team_id,
-                photo_url=data.get('photo')
+                team_id=team_id
             )
             session.add(player)
         return player
@@ -342,7 +297,7 @@ class FootballETL(ISportETL):
         league_info = data.get('league', {})
         league_id = league_info.get('id')
         
-        if not league_id or league_id not in self.ALLOWED_LEAGUE_IDS:
+        if not league_id or league_id not in ALLOWED_LEAGUE_IDS:
             return
         
         # Si ya existe, no la sobreescribimos para ahorrar recursos
@@ -351,7 +306,7 @@ class FootballETL(ISportETL):
         
         country_info = data.get('country', {})
         country_name = country_info.get('name', '')
-        region = self._get_region(country_name)
+        region = get_region(country_name)
         
         # Determinar la temporada actual
         current_season = 2026
@@ -366,7 +321,6 @@ class FootballETL(ISportETL):
             country=country_name,
             season=current_season,
             league_type=league_info.get('type'),
-            logo_url=league_info.get('logo'),
             region=region
         )
         session.add(league)
@@ -474,12 +428,7 @@ class FootballETL(ISportETL):
     # UTILIDADES DE AYUDA
     # ═══════════════════════════════════════════════════════
     
-    def _get_region(self, country: str) -> str:
-        """Determina la región/continente según el nombre del país."""
-        for region, countries in self.REGION_MAP.items():
-            if country in countries:
-                return region
-        return 'Otros'
+    # La función get_region se importa desde league_config.py
     
     @staticmethod
     def _parse_int(value) -> int:

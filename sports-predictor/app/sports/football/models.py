@@ -15,7 +15,6 @@ class League(SQLModel, table=True):
     country: str
     season: int
     league_type: Optional[str] = None  # 'League', 'Cup', 'Super Cup'
-    logo_url: Optional[str] = None
     region: Optional[str] = None  # 'Europe', 'South America', 'Asia', etc.
 
 
@@ -26,7 +25,6 @@ class Team(SQLModel, table=True):
     
     id: int = Field(primary_key=True)
     name: str
-    logo_url: Optional[str] = None
 
 
 class Player(SQLModel, table=True):
@@ -37,7 +35,6 @@ class Player(SQLModel, table=True):
     name: str
     position: Optional[str] = None
     team_id: Optional[int] = Field(default=None, foreign_key="football_team.id")
-    photo_url: Optional[str] = None
     nationality: Optional[str] = None
     age: Optional[int] = None
 
@@ -62,7 +59,6 @@ class Fixture(SQLModel, table=True):
     away_team_id: int = Field(foreign_key="football_team.id")
     home_score: Optional[int] = None
     away_score: Optional[int] = None
-    referee_name: Optional[str] = None
     home_coach_id: Optional[int] = Field(default=None, foreign_key="football_coach.id")
     away_coach_id: Optional[int] = Field(default=None, foreign_key="football_coach.id")
 
