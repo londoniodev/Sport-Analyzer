@@ -100,12 +100,65 @@ def show_match_detail_view():
     st.markdown("---")
     
     # ═══════════════════════════════════════════════════════
-    # TABS DE MERCADOS
+    # RESULTADO FINAL - SECCIÓN DESTACADA
     # ═══════════════════════════════════════════════════════
     
     markets = details.get("markets", {})
+    principal_markets = markets.get("principal", [])
     
-    # Contar mercados por categoría
+    # Buscar el mercado de Resultado Final / 1X2
+    resultado_final = None
+    for market in principal_markets:
+        label_lower = market.get("label", "").lower()
+        if any(x in label_lower for x in ["resultado final", "1x2", "tiempo reglam", "ganador"]):
+            resultado_final = market
+            break
+    
+    if resultado_final:
+        st.markdown("### Resultado Final")
+        
+        outcomes = resultado_final.get("outcomes", [])
+        if len(outcomes) >= 3:
+            cols = st.columns(3)
+            
+            # Mapear 1, X, 2 a nombres dinámicos
+            label_map = {
+                "1": home_team,
+                "X": "Empate",
+                "2": away_team
+            }
+            
+            for i, outcome in enumerate(outcomes):
+                with cols[i]:
+                    odds = outcome.get("odds", 0)
+                    out_label = outcome.get("label", "")
+                    
+                    # Usar nombre dinámico si es 1, X, o 2
+                    display_label = label_map.get(out_label, out_label)
+                    
+                    # Colores según posición
+                    colors = ["#3b82f6", "#eab308", "#ef4444"]  # Azul, Amarillo, Rojo
+                    
+                    st.markdown(f"""
+                    <div style="
+                        background: linear-gradient(135deg, #1e3a5f 0%, #0f2944 100%);
+                        border: 2px solid {colors[i]};
+                        border-radius: 12px;
+                        padding: 16px;
+                        text-align: center;
+                    ">
+                        <div style="color: #e2e8f0; font-size: 14px; font-weight: 500; margin-bottom: 8px;">{display_label}</div>
+                        <div style="color: {colors[i]}; font-size: 28px; font-weight: bold;">{odds:.2f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        st.markdown("")
+    
+    # ═══════════════════════════════════════════════════════
+    # TABS DE OTROS MERCADOS
+    # ═══════════════════════════════════════════════════════
+    
+    # Contar mercados por categoría (excluyendo resultado final ya mostrado)
     tab_labels = []
     tab_data = []
     
@@ -118,33 +171,45 @@ def show_match_detail_view():
     }
     
     for key, name in category_names.items():
-        if markets.get(key):
-            tab_labels.append(f"{name} ({len(markets[key])})")
-            tab_data.append((key, markets[key]))
+        market_list = markets.get(key, [])
+        
+        # Para principal, filtrar el resultado final ya mostrado
+        if key == "principal" and resultado_final:
+            market_list = [m for m in market_list if m != resultado_final]
+        
+        if market_list:
+            tab_labels.append(f"{name} ({len(market_list)})")
+            tab_data.append((key, market_list, home_team, away_team))
     
     # Agregar tab de estadísticas si hay datos
     if stats and (stats.get("stats") or stats.get("events")):
         tab_labels.append("Estadísticas")
-        tab_data.append(("stats", stats))
+        tab_data.append(("stats", stats, home_team, away_team))
     
     if not tab_labels:
-        st.info("No hay mercados disponibles para este partido.")
         return
     
     tabs = st.tabs(tab_labels)
     
     for i, tab in enumerate(tabs):
         with tab:
-            key, data = tab_data[i]
+            key, data, h_team, a_team = tab_data[i]
             
             if key == "stats":
                 _render_statistics(data)
             else:
-                _render_markets(data)
+                _render_markets(data, h_team, a_team)
 
 
-def _render_markets(markets_list: list):
+def _render_markets(markets_list: list, home_team: str = "", away_team: str = ""):
     """Renderiza una lista de mercados de apuestas."""
+    
+    # Mapeo de labels genéricos a nombres dinámicos
+    label_map = {
+        "1": home_team if home_team else "1",
+        "X": "Empate",
+        "2": away_team if away_team else "2"
+    }
     
     for market in markets_list:
         label = market.get("label", "Mercado")
@@ -163,9 +228,10 @@ def _render_markets(markets_list: list):
                     out_label = outcome.get("label", "")
                     line = outcome.get("line")
                     
-                    display_label = out_label
+                    # Usar nombre dinámico si es 1, X, o 2
+                    display_label = label_map.get(out_label, out_label)
                     if line:
-                        display_label = f"{out_label} ({line})"
+                        display_label = f"{display_label} ({line})"
                     
                     # Estilo de botón con cuota
                     st.markdown(f"""

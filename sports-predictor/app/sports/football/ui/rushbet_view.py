@@ -86,7 +86,28 @@ def _show_events_list():
         if not df.empty:
             st.success(f"Mostrando {len(df)} eventos. Selecciona uno para ver detalles.")
             
-            # Mostrar cada evento como una tarjeta clickeable
+            # Encabezados de la tabla
+            header_cols = st.columns([0.6, 1.5, 1.8, 1.8, 0.7, 0.7, 0.7, 1])
+            with header_cols[0]:
+                st.markdown("**Hora**")
+            with header_cols[1]:
+                st.markdown("**Liga**")
+            with header_cols[2]:
+                st.markdown("**Local**")
+            with header_cols[3]:
+                st.markdown("**Visitante**")
+            with header_cols[4]:
+                st.markdown("**1**")
+            with header_cols[5]:
+                st.markdown("**X**")
+            with header_cols[6]:
+                st.markdown("**2**")
+            with header_cols[7]:
+                st.markdown("")
+            
+            st.markdown("<hr style='margin: 4px 0; border-color: #334155;'>", unsafe_allow_html=True)
+            
+            # Mostrar cada evento como una fila
             for idx, row in df.iterrows():
                 _render_event_card(row)
         else:
@@ -96,7 +117,7 @@ def _show_events_list():
 
 
 def _render_event_card(event):
-    """Renderiza un evento como tarjeta con botón de detalle."""
+    """Renderiza un evento como fila de la tabla con botón de detalle."""
     
     event_id = event.get("id")
     home_team = event.get("home_team", "Local")
@@ -114,29 +135,34 @@ def _render_event_card(event):
     odds_x = event.get("odds_x", 0) or 0
     odds_2 = event.get("odds_2", 0) or 0
     
-    # Contenedor de la tarjeta
+    # Contenedor de la fila
     with st.container():
-        cols = st.columns([0.8, 2, 2, 1, 1, 1, 1.2])
+        cols = st.columns([0.6, 1.5, 1.8, 1.8, 0.7, 0.7, 0.7, 1])
         
         with cols[0]:
-            st.markdown(f"**{time_str}**")
+            st.markdown(f"{time_str}")
         
         with cols[1]:
-            st.markdown(f"**{home_team}**")
+            # Liga con texto truncado si es muy largo
+            league_display = league[:20] + "..." if len(league) > 20 else league
+            st.markdown(f"<span style='color: #94a3b8; font-size: 13px;'>{league_display}</span>", unsafe_allow_html=True)
         
         with cols[2]:
-            st.markdown(f"**{away_team}**")
+            st.markdown(f"<b>{home_team}</b>", unsafe_allow_html=True)
         
         with cols[3]:
-            st.markdown(f"`{odds_1:.2f}`" if odds_1 else "-")
+            st.markdown(f"<b>{away_team}</b>", unsafe_allow_html=True)
         
         with cols[4]:
-            st.markdown(f"`{odds_x:.2f}`" if odds_x else "-")
+            st.markdown(f"<span style='color: #22c55e;'>{odds_1:.2f}</span>" if odds_1 else "-", unsafe_allow_html=True)
         
         with cols[5]:
-            st.markdown(f"`{odds_2:.2f}`" if odds_2 else "-")
+            st.markdown(f"<span style='color: #eab308;'>{odds_x:.2f}</span>" if odds_x else "-", unsafe_allow_html=True)
         
         with cols[6]:
+            st.markdown(f"<span style='color: #ef4444;'>{odds_2:.2f}</span>" if odds_2 else "-", unsafe_allow_html=True)
+        
+        with cols[7]:
             if st.button("Ver más", key=f"detail_{event_id}", icon=":material/open_in_new:", use_container_width=True):
                 st.session_state.selected_event_id = event_id
                 st.session_state.selected_event_data = event.to_dict()
@@ -144,4 +170,4 @@ def _render_event_card(event):
                 st.rerun()
         
         # Línea separadora sutil
-        st.markdown("<hr style='margin: 4px 0; border-color: #1e293b;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin: 2px 0; border-color: #1e293b;'>", unsafe_allow_html=True)
