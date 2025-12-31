@@ -225,59 +225,77 @@ class RushbetClient:
     def _categorize_market(self, label: str, outcomes: list) -> str:
         """Categoriza un mercado basado en su label."""
         label_lower = label.lower()
+        print(f"DEBUG: Categorizing '{label}'...") # LOG
         
-        # --- MEDIO TIEMPO (PRIMERO - tiene referencias a mitades/partes) ---
-        # Esto debe ir primero para no mezclarse con tiempo_reglamentario
+        # --- MEDIO TIEMPO (PRIMERO) ---
         if any(x in label_lower for x in ["1ª mitad", "2ª mitad", "1° mitad", "2° mitad",
                                            "1ª parte", "2ª parte", "1° parte", "2° parte",
                                            "primera mitad", "segunda mitad", 
                                            "1st half", "2nd half",
                                            "- 1ª", "- 2ª", "- 1°", "- 2°"]):
+            print(f"DEBUG: -> medio_tiempo")
             return "medio_tiempo"
         
-        # --- JUGADORES (tienen participantes específicos) ---
+        # --- CORNERS (Antes de equipos para evitar confusiones) ---
+        if any(x in label_lower for x in ["esquina", "corner", "córner"]):
+            print(f"DEBUG: -> corners")
+            return "corners"
+
+        # --- JUGADORES (keywords fuertes) ---
+        # Detectar portero explícitamente sin depender de 'participant'
+        if "portero" in label_lower or "goalkeeper" in label_lower or "paradas" in label_lower:
+             print(f"DEBUG: -> paradas_portero")
+             return "paradas_portero"
+
         has_player = any(out.get("participant") or out.get("participantName") for out in outcomes)
         
-        if has_player or "jugador" in label_lower or "player" in label_lower:
-            if any(x in label_lower for x in ["goleador", "primer gol", "marcará", "anytime scorer", "first goal"]):
-                return "goleador"
-            elif any(x in label_lower for x in ["tarjeta", "card", "booking"]):
-                return "tarjetas_jugador"
-            elif any(x in label_lower for x in ["asistencia", "assist"]):
+        if has_player or "jugador" in label_lower or "player" in label_lower or "goleador" in label_lower:
+            if any(x in label_lower for x in ["asistencia", "assist"]):
+                print(f"DEBUG: -> asistencias_jugador")
                 return "asistencias_jugador"
-            elif any(x in label_lower for x in ["parada", "save", "portero", "goalkeeper"]):
-                return "paradas_portero"
+            elif any(x in label_lower for x in ["tarjeta", "card", "booking"]):
+                print(f"DEBUG: -> tarjetas_jugador")
+                return "tarjetas_jugador"
             elif any(x in label_lower for x in ["disparo", "shot", "tiro"]):
+                print(f"DEBUG: -> disparos_jugador")
                 return "disparos_jugador"
-            elif any(x in label_lower for x in ["gol", "goal", "dos goles", "brace"]):
-                return "goles_jugador"
+            elif any(x in label_lower for x in ["gol", "goal", "marcará"]):
+                # Diferenciar Goleador vs Goles del Jugador
+                if "goles" in label_lower or "2" in label_lower:
+                     print(f"DEBUG: -> goles_jugador")
+                     return "goles_jugador"
+                print(f"DEBUG: -> goleador")
+                return "goleador"
             else:
+                print(f"DEBUG: -> apuestas_especiales_jugador")
                 return "apuestas_especiales_jugador"
         
         # --- HANDICAP ---
         if any(x in label_lower for x in ["hándicap 3", "handicap 3-way", "handicap 3 way"]):
+            print(f"DEBUG: -> handicap_3way")
             return "handicap_3way"
         if any(x in label_lower for x in ["asiático", "asian", "ah ", "línea asiática"]):
+            print(f"DEBUG: -> lineas_asiaticas")
             return "lineas_asiaticas"
         
-        # --- CORNERS ---
-        if any(x in label_lower for x in ["esquina", "corner", "córner"]):
-            return "corners"
-        
         # --- TARJETAS EQUIPO ---
-        if any(x in label_lower for x in ["tarjeta", "card"]) and "jugador" not in label_lower:
+        if any(x in label_lower for x in ["tarjeta", "card"]):
+            print(f"DEBUG: -> tarjetas_equipo")
             return "tarjetas_equipo"
         
         # --- DISPAROS EQUIPO ---
-        if any(x in label_lower for x in ["disparo", "shot", "tiros a puerta"]) and "jugador" not in label_lower:
+        if any(x in label_lower for x in ["disparo", "shot", "tiros a puerta", "tiro a puerta"]):
+            print(f"DEBUG: -> disparos_equipo")
             return "disparos_equipo"
         
         # --- EVENTOS DEL PARTIDO ---
         if any(x in label_lower for x in ["primer gol", "propia meta", "sin recibir gol", 
                                            "gana al menos una mitad", "al palo", "clean sheet"]):
+            print(f"DEBUG: -> eventos_partido")
             return "eventos_partido"
         
-        # --- TIEMPO REGLAMENTARIO (default - mercados sin mitades) ---
+        # --- TIEMPO REGLAMENTARIO (Default) ---
+        print(f"DEBUG: -> tiempo_reglamentario")
         return "tiempo_reglamentario"
     
     def get_event_statistics(self, event_id: int) -> Optional[Dict[str, Any]]:

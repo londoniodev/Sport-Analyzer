@@ -177,13 +177,6 @@ def show_match_detail_view():
     # Encabezado
     _render_match_header(details, event_basic)
     
-    # Resultado Final destacado
-    tiempo_reg = markets.get("tiempo_reglamentario", [])
-    resultado_final = _find_market(tiempo_reg, ["resultado final", "1x2"])
-    
-    if resultado_final:
-        _render_resultado_final(resultado_final, home_team, away_team)
-    
     # Pestañas
     tabs_with_data = []
     for tab_name, categories in TABS_CONFIG.items():
@@ -205,10 +198,6 @@ def show_match_detail_view():
             for cat_key in categories:
                 cat_markets = markets.get(cat_key, [])
                 
-                # Excluir resultado final ya mostrado
-                if cat_key == "tiempo_reglamentario" and resultado_final:
-                    cat_markets = [m for m in cat_markets if m != resultado_final]
-                
                 # Ordenar según especificación
                 orden = ORDEN_POR_CATEGORIA.get(cat_key)
                 if orden:
@@ -218,6 +207,14 @@ def show_match_detail_view():
                     cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
                     with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
                         _render_category_markets(cat_markets, home_team, away_team, orden)
+
+    # --- DEBUG LOGS (Solicitado por usuario) ---
+    with st.expander("Logs del Sistema (Debug)", expanded=False):
+        st.markdown("### Categorización de Mercados")
+        # Mostrar el conteo por categoría para verificar
+        debug_counts = {k: len(v) for k, v in markets.items() if v}
+        st.json(debug_counts)
+        st.markdown("Revisa la consola de tu aplicación para logs detallados de 'DEBUG'.")
 
 
 def _sort_markets_by_order(markets: list, orden: list) -> list:
