@@ -227,16 +227,37 @@ class RushbetClient:
             # Buscamos un mercado que tenga 3 outcomes y cuyos labels coincidan con los nombres de equipos
             if not result["home_id"] or not result["away_id"]:
                  # Solo si tenemos labels claros
-                 if len(outcomes) == 3: # 1X2 market candidate
-                     for out in outcomes:
-                         lbl = out.get("label", "")
-                         epid = out.get("eventParticipantId")
-                         if not epid: continue
-                         
-                         if lbl == home_team:
-                             result["home_id"] = epid
-                         elif lbl == away_team:
-                             result["away_id"] = epid
+                if len(outcomes) == 3: # Candidato a mercado 1X2
+                    # Orden estándar en Kambi: Home, Draw, Away
+                    for i, out in enumerate(outcomes):
+                        lbl = out.get("label", "")
+                        epid = out.get("eventParticipantId")
+                        if not epid: continue
+                        
+                        # Match por nombre exacto O por posición/etiqueta standard
+                        if lbl == home_team or (lbl == "1" and i == 0):
+                            result["home_id"] = epid
+                        elif lbl == away_team or (lbl == "2" and i == 2):
+                            result["away_id"] = epid
+            
+            # --- SEGUNDO PASO: Fallback agresivo si aún faltan IDs ---
+            if not result["home_id"] or not result["away_id"]:
+                for offer in offers:
+                    outcomes = offer.get("outcomes", [])
+                    for out in outcomes:
+                        lbl = out.get("label", "")
+                        epid = out.get("eventParticipantId")
+                        if not epid: continue
+                        
+                        if not result["home_id"] and lbl == home_team:
+                            result["home_id"] = epid
+                        if not result["away_id"] and lbl == away_team:
+                            result["away_id"] = epid
+                        
+                        if result["home_id"] and result["away_id"]:
+                            break
+                    if result["home_id"] and result["away_id"]:
+                        break
                              
         return result
     

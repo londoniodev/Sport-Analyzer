@@ -95,6 +95,11 @@ def show_match_detail_view():
                     
                     status.update(label="¡Historial Sincronizado!", state="complete", expanded=False)
                 st.success(f"Sincronización finalizada: {h_count + a_count} partidos totales en base de datos.")
+        else:
+            st.error("⚠️ No se detectaron IDs de equipos. El botón de descarga está deshabilitado.")
+            with st.expander("Ver IDs Detectados (Debug)"):
+                st.write(f"Home: {home_team} (ID: {home_id})")
+                st.write(f"Away: {away_team} (ID: {away_id})")
 
     with col_a:
         do_analysis = st.toggle("📈 Mostrar Análisis Dinámico", 
