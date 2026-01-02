@@ -179,6 +179,7 @@ class RushbetClient:
                 "corners": [],
                 "tarjetas_equipo": [],
                 "disparos_equipo": [],
+                "faltas_equipo": [],
                 "eventos_partido": [],
                 # Tab: Jugadores
                 "goleador": [],
@@ -240,115 +241,165 @@ class RushbetClient:
         return result
     
     def _categorize_market(self, label: str, outcomes: list) -> str:
-        """Categoriza un mercado basado en su label de forma robusta."""
+        """
+        Categoriza un mercado usando sistema de DOS NIVELES:
+        1. Coincidencia exacta (normalizada) para mercados genéricos
+        2. Patrones de keywords para mercados con nombres de equipos dinámicos
+        """
         label_lower = label.lower()
-        print(f"DEBUG: Categorizing '{label}'...")
-
-        # 1. MEDIO TIEMPO (Prioridad Máxima y corrección de '1.ª')
-        # Patrones que indican mitades explícitamente
-        if any(x in label_lower for x in [
-            "1ª parte", "2ª parte", "1.ª parte", "2.ª parte",
-            "1ª mitad", "2ª mitad", "1.ª mitad", "2.ª mitad",
-            "1° parte", "2° parte", "1° mitad", "2° mitad",
-            "1st half", "2nd half", "- 1ª", "- 2ª"
-        ]):
-            # Excepción: "Gol en ambas mitades" va en tiempo reglamentario según usuario
-            if "ambas mitades" in label_lower:
-                pass 
-            else:
-                print(f"DEBUG: -> medio_tiempo (por patrón de mitad)")
-                return "medio_tiempo"
-
-        # 2. CORNERS
-        if "esquina" in label_lower or "corner" in label_lower or "córner" in label_lower:
-            print(f"DEBUG: -> corners")
-            return "corners"
-
-        # 3. LISTA BLANCA DE TIEMPO REGLAMENTARIO (Evita que caigan en Jugadores)
-        # Estos mercados suelen tener participantes (equipos) pero SON de partido
-        safe_team_markets = [
-            "resultado final", "1x2", "doble oportunidad", "apuesta sin empate",
-            "ambos equipos", "btts", "resultado correcto", "marcador correcto",
-            "total de goles", "descanso/tiempo", "medio tiempo/final",
-            "victoria de", "gol en ambas mitades", "ganador del partido"
-        ]
-        if any(x in label_lower for x in safe_team_markets):
-            # Verificar que NO sea de mitades (ya filtrado arriba, pero por seguridad)
-            # y que NO sea explícitamente de jugador (ej. "Total de goles de Haaland")
-            # Pero "Total de goles de Getafe" SÍ es tiempo reglamentario.
-            # La distinción clave es si menciona un jugador específico.
+        
+        # Normalizar: remover sufijos comunes de Opta Data
+        normalized_label = label_lower
+        for suffix in ["(resuelta usando opta data)", "(resuelta usando datos opta)", "(resulta usando datos opta)"]:
+            normalized_label = normalized_label.replace(suffix, "").strip()
+        
+        # ============================================================
+        # NIVEL 1: COINCIDENCIAS EXACTAS (mercados sin nombres de equipo)
+        # ============================================================
+        EXACT_MATCHES = {
+            # --- Tiempo Reglamentario ---
+            "resultado correcto": "tiempo_reglamentario",
+            "resultado final": "tiempo_reglamentario",
+            "doble oportunidad": "tiempo_reglamentario",
+            "apuesta sin empate": "tiempo_reglamentario",
+            "ambos equipos marcarán": "tiempo_reglamentario",
+            "total de goles": "tiempo_reglamentario",
+            "descanso/tiempo reglamentario": "tiempo_reglamentario",
+            "gol en ambas mitades": "tiempo_reglamentario",
+            "penalti señalado": "tiempo_reglamentario",
             
-            # Si dice "total de goles" y tiene participante, verificar si es equipo o jugador
-            # Asumimos que si cae aquí es equipo, la lógica de jugador es más específica abajo.
-            print(f"DEBUG: -> tiempo_reglamentario (safe list)")
-            return "tiempo_reglamentario"
-
-        # 4. HANDICAP & ASIÁTICOS
-        if "asiático" in label_lower or "asian" in label_lower:
-            print(f"DEBUG: -> lineas_asiaticas")
-            return "lineas_asiaticas"
-        if "hándicap" in label_lower or "handicap" in label_lower:
-            # Distinguir entre handicap normal (tab partido) y 3-way (tab handicap)
-            if "3-way" in label_lower or "3 way" in label_lower or "3 opciones" in label_lower:
-                print(f"DEBUG: -> handicap_3way")
-                return "handicap_3way"
-            # Si es solo handicap, el usuario lo puso en Tiempo Reglamentario ("Hándicap (lista)")
-            print(f"DEBUG: -> tiempo_reglamentario (handicap simple)")
-            return "tiempo_reglamentario"
-
-        # 5. JUGADORES
-        # Detección específica por palabras clave fuertes
-        if any(x in label_lower for x in ["goleador", "primer gol", "marcará", "anytime scorer", "hat-trick", "asistenc", "disparo", "tiro", "pases", "faltas cometidas por", "fueras de juego por"]):
-             is_player_prop = True
-             # Refinar subcategoría
-             if "asistencia" in label_lower: return "asistencias_jugador"
-             if "tarjeta" in label_lower: return "tarjetas_jugador"
-             if "disparo" in label_lower or "tiro" in label_lower:
-                 # Cuidado: "tiros de esquina" ya se filtró. "tiros por parte de Getafe" es equipo.
-                 if "parte de" in label_lower and "jugador" not in label_lower:
-                     # Es equipo (ej: "tiros por parte de Getafe")
-                     print(f"DEBUG: -> disparos_equipo")
-                     return "disparos_equipo"
-                 return "disparos_jugador"
-             if "parada" in label_lower or "portero" in label_lower: return "paradas_portero"
-             if "falta" in label_lower: return "apuestas_especiales_jugador" # O tarjeta
-             
-             # Goles
-             if "goles" in label_lower or "2" in label_lower or "dos" in label_lower: return "goles_jugador"
-             return "goleador" # Default disparos/goles
-
-        # Detección genérica por participante (outcome tiene participantID)
+            # --- Medio Tiempo (genéricos) ---
+            "descanso": "medio_tiempo",
+            
+            # --- Eventos del Partido ---
+            "número total de fueras de juego": "eventos_partido",
+            "gol en propia meta": "eventos_partido",
+            "al palo durante el partido": "eventos_partido",
+            
+            # --- Faltas del Equipo (NUEVA) ---
+            "faltas concedidas": "faltas_equipo",
+            
+            # --- Corners ---
+            "más tiros de esquina": "corners",
+            "total de tiros de esquina": "corners",
+            
+            # --- Tarjetas Equipo ---
+            "total de tarjetas": "tarjetas_equipo",
+            "tarjeta roja mostrada": "tarjetas_equipo",
+            "más tarjetas": "tarjetas_jugador",  # Va a jugador porque es comparativo en tabla
+            
+            # --- Disparos Equipo ---
+            "número total de disparos": "disparos_equipo",
+            "número total de disparos a puerta": "disparos_equipo",
+            "número total de tiros a puerta": "disparos_equipo",
+            "número total de tiros": "disparos_equipo",
+            
+            # --- Disparos Jugador ---
+            "más tiros a puerta": "disparos_jugador",
+            
+            # --- Goles Jugador ---
+            "primer gol (empate: sin goles)": "goles_jugador",
+            
+            # --- Paradas Portero ---
+            "paradas del portero": "paradas_portero",
+            
+            # --- Handicap ---
+            "hándicap 3-way": "handicap_3way",
+            "handicap 3-way": "handicap_3way",
+            "tarjetas hándicap 3-way": "handicap_3way",
+            
+            # --- Líneas Asiáticas ---
+            "total asiático": "lineas_asiaticas",
+            "hándicap asiático": "lineas_asiaticas",
+            "handicap asiático": "lineas_asiaticas",
+        }
+        
+        if normalized_label in EXACT_MATCHES:
+            category = EXACT_MATCHES[normalized_label]
+            print(f"DEBUG: '{label}' -> {category} (exact match)")
+            return category
+        
+        # ============================================================
+        # NIVEL 2: PATRONES DE KEYWORDS (mercados con nombres dinámicos)
+        # ============================================================
+        
+        # Orden de prioridad de patrones (de más específico a menos)
+        KEYWORD_PATTERNS = [
+            # --- Mitades (prioridad alta) ---
+            (["1ª parte", "2ª parte", "1.ª parte", "2.ª parte", 
+              "1ª mitad", "2ª mitad", "1.ª mitad", "2.ª mitad",
+              "1° parte", "2° parte", "- 1ª", "- 2ª"], "medio_tiempo"),
+            
+            # --- Corners ---
+            (["esquina", "corner", "córner"], "corners"),
+            
+            # --- Asiáticos (antes de hándicap genérico) ---
+            (["asiático", "asian"], "lineas_asiaticas"),
+            
+            # --- Handicap 3-Way ---
+            (["3-way", "3 way", "3 opciones"], "handicap_3way"),
+            
+            # --- Faltas (equipo y jugador) ---
+            (["faltas cometidas por", "número total de faltas cometidas por"], "faltas_equipo"),
+            (["faltas cometidas por el jugador"], "apuestas_especiales_jugador"),
+            
+            # --- Fueras de juego ---
+            (["fuera de juego", "fueras de juego"], "eventos_partido"),
+            
+            # --- Eventos de partido con equipos ---
+            (["sin recibir gol", "gana al menos una mitad", "al palo durante", 
+              "propia meta", "marca de penalti"], "eventos_partido"),
+            (["victoria de", "y ambos equipos marcan"], "tiempo_reglamentario"),
+            
+            # --- Paradas del Portero ---
+            (["paradas del portero"], "paradas_portero"),
+            
+            # --- Goleador / Marcará ---
+            (["primer goleador", "marcará", "anytime scorer", "hat-trick", 
+              "marcará de cabeza", "marcará desde fuera"], "goleador"),
+            (["marca al menos 2 goles", "marca al menos 3 goles"], "apuestas_especiales_jugador"),
+            (["marcará o dará una asistencia"], "apuestas_especiales_jugador"),
+            
+            # --- Asistencias ---
+            (["asistencia", "dará una asistencia"], "asistencias_jugador"),
+            
+            # --- Tarjetas ---
+            (["tarjeta roja a", "total de tarjetas -"], "tarjetas_equipo"),
+            (["recibirá una tarjeta"], "tarjetas_jugador"),
+            
+            # --- Disparos ---
+            (["tiros a puerta por parte de", "tiros por parte de", 
+              "número total de tiros a puerta por parte de", "número total de tiros por parte de"], "disparos_equipo"),
+            (["disparos del jugador", "disparos a puerta del jugador"], "disparos_jugador"),
+            
+            # --- Goles de equipo ---
+            (["total de goles de"], "tiempo_reglamentario"),
+            
+            # --- Hándicap genérico (al final) ---
+            (["hándicap", "handicap"], "tiempo_reglamentario"),
+        ]
+        
+        for keywords, category in KEYWORD_PATTERNS:
+            if any(kw in label_lower for kw in keywords):
+                # Excepción especial: "ambas mitades" va a tiempo_reglamentario
+                if "ambas mitades" in label_lower and category == "medio_tiempo":
+                    continue
+                print(f"DEBUG: '{label}' -> {category} (keyword: {[kw for kw in keywords if kw in label_lower]})")
+                return category
+        
+        # ============================================================
+        # NIVEL 3: DETECCIÓN POR PARTICIPANTE (fallback para jugadores)
+        # ============================================================
         has_participant = any(out.get("participant") or out.get("participantName") for out in outcomes)
         if has_participant:
-            # Aquí es delicado. "Total de goles de Getafe" tiene participante pero es Tiempo Reg.
-            # Ya filtramos 'safe_team_markets' arriba.
-            # Si llegamos aquí, es algo con participante que NO es corners, ni handicap 3way, ni safe list.
-            
-            if "tarjeta" in label_lower:
-                # Si es "Tarjeta roja a Getafe" -> Tarjetas Equipo
-                if "roja a" in label_lower or "total de tarjetas" in label_lower:
-                     print(f"DEBUG: -> tarjetas_equipo")
-                     return "tarjetas_equipo"
-                return "tarjetas_jugador"
-            
-            print(f"DEBUG: -> apuestas_especiales_jugador (generic participant)")
+            # Si tiene participante y no matcheó arriba, probablemente es especial
+            print(f"DEBUG: '{label}' -> apuestas_especiales_jugador (has participant)")
             return "apuestas_especiales_jugador"
-
-        # 6. CATEGORÍAS RESTANTES DE EQUIPO
-        if "tarjeta" in label_lower:
-            print(f"DEBUG: -> tarjetas_equipo")
-            return "tarjetas_equipo"
         
-        if "disparo" in label_lower or "tiro" in label_lower:
-            print(f"DEBUG: -> disparos_equipo")
-            return "disparos_equipo"
-
-        if any(x in label_lower for x in ["propia meta", "sin recibir gol", "gana al menos", "al palo"]):
-            print(f"DEBUG: -> eventos_partido")
-            return "eventos_partido"
-
-        # 7. DEFAULT
-        print(f"DEBUG: -> tiempo_reglamentario (default)")
+        # ============================================================
+        # DEFAULT: tiempo_reglamentario
+        # ============================================================
+        print(f"DEBUG: '{label}' -> tiempo_reglamentario (default)")
         return "tiempo_reglamentario"
     
     def get_event_statistics(self, event_id: int) -> Optional[Dict[str, Any]]:

@@ -4,7 +4,7 @@ LIST = "list"
 
 # Mapeo de Tabs a Categorías API
 TABS_CONFIG = {
-    "PARTIDO": ["tiempo_reglamentario", "medio_tiempo", "corners", "tarjetas_equipo", "disparos_equipo", "eventos_partido"],
+    "PARTIDO": ["tiempo_reglamentario", "medio_tiempo", "corners", "tarjetas_equipo", "disparos_equipo", "faltas_equipo", "eventos_partido"],
     "JUGADORES": ["disparos_jugador", "goleador", "tarjetas_jugador", "apuestas_especiales_jugador", "asistencias_jugador", "goles_jugador", "paradas_portero"],
     "HANDICAP": ["handicap_3way", "lineas_asiaticas"]
 }
@@ -16,6 +16,7 @@ NOMBRES_CATEGORIAS = {
     "corners": "Tiros de Esquina",
     "tarjetas_equipo": "Partido y Tarjetas del Equipo",
     "disparos_equipo": "Partido y Disparos del Equipo",
+    "faltas_equipo": "Partido y Faltas del Equipo",
     "eventos_partido": "Eventos del Partido",
     "disparos_jugador": "Disparos a Puerta del Jugador",
     "goleador": "Goleador",
