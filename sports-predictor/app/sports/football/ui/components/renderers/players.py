@@ -235,6 +235,10 @@ def _render_generic_player_table(markets: list, title: str,
             odds = out.get("odds")
             line = out.get("line")
             
+            # FILTRAR: Si no hay línea (line=None), es apuesta de equipo, no de jugador
+            if line is None:
+                continue
+            
             team = _infer_team(out, m_label, home_team, away_team, home_id, away_id)
             row = {"Equipo": team, "Jugador": p_name}
             
