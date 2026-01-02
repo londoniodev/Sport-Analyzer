@@ -74,3 +74,21 @@ def _apply_table_styles(df: pd.DataFrame, numeric_cols: list = None):
             styler = styler.apply(get_gradient_style, subset=[col])
             
     return styler
+
+def get_card_html(label: str, odds: float) -> str:
+    """
+    Genera el HTML para una 'Card' de apuesta estandarizada.
+    
+    Estilo:
+    - Fondo oscuro azulado (#1e3a5f)
+    - Borde sutil (#2d5a87)
+    - Label gris claro (#94a3b8) pequeño
+    - Cuota verde neón (#22c55e) grande y negrita
+    - Efecto hover (opcional, por ahora estático)
+    """
+    return f"""
+    <div style="background:#1e3a5f;border:1px solid #2d5a87;border-radius:8px;padding:10px;text-align:center;margin:2px;height:100%;">
+        <div style="color:#94a3b8;font-size:11px;line-height:1.2;margin-bottom:4px;">{label}</div>
+        <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
+    </div>
+    """

@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from ..styles import _apply_table_styles
+from ..styles import _apply_table_styles, get_card_html
 from ..market_logic import _sort_markets_by_order, _get_market_format
 
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
@@ -80,12 +80,7 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
             elif out_label in label_map.values(): 
                  display_label = f"<b>{display_label}</b>"
 
-            st.markdown(f"""
-            <div style="background:#1e3a5f;border:1px solid #2d5a87;border-radius:8px;padding:10px;text-align:center;margin:2px;">
-                <div style="color:#94a3b8;font-size:11px;">{display_label}</div>
-                <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(get_card_html(display_label, odds), unsafe_allow_html=True)
     
     st.markdown("")
 
