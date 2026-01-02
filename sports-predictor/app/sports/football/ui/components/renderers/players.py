@@ -289,11 +289,31 @@ def _render_generic_player_table(markets: list, title: str,
 
 
 def _render_player_shots(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
-    _render_generic_player_table(markets, "Disparos a Puerta", 
-                               home_team, away_team, home_id, away_id,
-                               val_col_name="Cantidad", 
-                               is_binary=False, 
-                               line_format_div_1000=True)
+    """Renderiza mercados de disparos, separando 'A Puerta' de 'Totales'."""
+    shots_on_target = []
+    total_shots = []
+    
+    for m in markets:
+        lbl = m.get("label", "").lower()
+        if "a puerta" in lbl:
+            shots_on_target.append(m)
+        else:
+            total_shots.append(m)
+            
+    if shots_on_target:
+        _render_generic_player_table(shots_on_target, "Disparos a Puerta", 
+                                   home_team, away_team, home_id, away_id,
+                                   val_col_name="Cantidad", 
+                                   is_binary=False, 
+                                   line_format_div_1000=True)
+                                   
+    if total_shots:
+        if shots_on_target: st.markdown("---")
+        _render_generic_player_table(total_shots, "Disparos (Totales)", 
+                                   home_team, away_team, home_id, away_id,
+                                   val_col_name="Cantidad", 
+                                   is_binary=False, 
+                                   line_format_div_1000=True)
 
 def _render_player_specials(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     data_map = {}
