@@ -70,27 +70,55 @@ def _apply_table_styles(df: pd.DataFrame, numeric_cols: list = None):
             
         return styles
 
-    # Aplicar a clumnas numéricas
+    # Aplicar a columnas numéricas
     for col in numeric_cols:
         if col in df.columns:
             styler = styler.apply(get_gradient_style, subset=[col])
             
     return styler
 
+def render_styled_table(df: pd.DataFrame, numeric_cols: list = None):
+    """
+    Renderiza una tabla estilizada como HTML para usar con st.markdown.
+    Incluye centrado de texto y mapa de calor.
+    """
+    styler = _apply_table_styles(df, numeric_cols)
+    # Ocultar índice y generar HTML
+    html = styler.hide(axis='index').to_html()
+    # Inyectar CSS adicional para centrado forzado
+    css = """
+    <style>
+    .dataframe-container table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .dataframe-container th, .dataframe-container td {
+        text-align: center !important;
+        vertical-align: middle !important;
+        padding: 8px !important;
+    }
+    .dataframe-container th {
+        background-color: #1e3a5f;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+    """
+    return f'<div class="dataframe-container">{css}{html}</div>'
+
 def get_card_html(label: str, odds: float) -> str:
     """
     Genera el HTML para una 'Card' de apuesta estandarizada.
     
     Estilo:
-    - Fondo oscuro azulado (#1e3a5f)
+    - Fondo oscuro (#0E1117)
     - Borde sutil (#2d5a87)
-    - Label gris claro (#94a3b8) pequeño
+    - Label blanco
     - Cuota verde neón (#22c55e) grande y negrita
-    - Efecto hover (opcional, por ahora estático)
     """
     return f"""
-    <div style="background:#1e3a5f;border:1px solid #2d5a87;border-radius:8px;padding:10px;text-align:center;margin:2px;height:100%;">
-        <div style="color:#94a3b8;font-size:11px;line-height:1.2;margin-bottom:4px;">{label}</div>
+    <div style="background:#0E1117;border:1px solid #2d5a87;border-radius:8px;padding:10px;text-align:center;margin:2px;height:100%;">
+        <div style="color:#ffffff;font-size:11px;line-height:1.2;margin-bottom:4px;">{label}</div>
         <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
     </div>
     """

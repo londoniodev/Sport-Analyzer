@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from ..styles import _apply_table_styles, get_section_title_html
+from ..styles import _apply_table_styles, get_section_title_html, render_styled_table
 from .common import _render_as_card
 
 def _infer_team(outcome: dict, market_label: str, home_team: str, away_team: str, home_id=None, away_id=None) -> str:
@@ -101,15 +101,10 @@ def _render_scorers_markets(markets: list, home_team: str, away_team: str, home_
     }
 
     rows_count = len(final_df)
-    dynamic_height = (rows_count + 1) * 35 + 3
     
-    st.dataframe(
-        styler, 
-        hide_index=True, 
-        use_container_width=True,
-        column_config=column_config,
-        height=dynamic_height
-    )
+    # Usar HTML renderizado para centrado correcto
+    html_table = render_styled_table(final_df, ["Primer Gol", "Marcará"])
+    st.markdown(html_table, unsafe_allow_html=True)
     st.markdown("")
 
 
@@ -182,16 +177,9 @@ def _render_player_cards_markets(markets: list, home_team: str, away_team: str, 
                 "Roja": st.column_config.NumberColumn(format="%.2f")
             }
             
-            rows_count = len(final_df)
-            dynamic_height = (rows_count + 1) * 35 + 3
-            
-            st.dataframe(
-                styler,
-                hide_index=True,
-                use_container_width=True,
-                column_config=column_config,
-                height=dynamic_height
-            )
+            # Usar HTML renderizado para centrado correcto
+            html_table = render_styled_table(final_df, ["Tarjeta", "Roja"])
+            st.markdown(html_table, unsafe_allow_html=True)
             st.markdown("")
 
     if other_markets:
@@ -283,16 +271,9 @@ def _render_generic_player_table(markets: list, title: str,
     for c in valid_numerics:
         col_config[c] = st.column_config.NumberColumn(format="%.2f")
         
-    rows_count = len(df)
-    dynamic_height = min((rows_count + 1) * 35 + 3, 600)
-    
-    st.dataframe(
-        styler,
-        hide_index=True,
-        use_container_width=True,
-        column_config=col_config,
-        height=dynamic_height
-    )
+    # Usar HTML renderizado para centrado correcto
+    html_table = render_styled_table(df, valid_numerics)
+    st.markdown(html_table, unsafe_allow_html=True)
     st.markdown("")
 
 
@@ -363,13 +344,9 @@ def _render_player_specials(markets: list, home_team: str, away_team: str, home_
     
     col_conf = {c: st.column_config.NumberColumn(format="%.2f") for c in numerics}
     
-    st.dataframe(
-        styler,
-        hide_index=True,
-        use_container_width=True,
-        column_config=col_conf,
-        height=(len(df)+1)*35+3
-    )
+    # Usar HTML renderizado para centrado correcto
+    html_table = render_styled_table(df, numerics)
+    st.markdown(html_table, unsafe_allow_html=True)
 
 def _render_player_assists(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     _render_generic_player_table(markets, "Asistencias", home_team, away_team, home_id, away_id, is_binary=True)

@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from ..styles import _apply_table_styles, get_card_html, get_section_title_html
+from ..styles import _apply_table_styles, get_card_html, get_section_title_html, render_styled_table
 from ..market_logic import _sort_markets_by_order, _get_market_format
 
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
@@ -173,14 +173,10 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
                         format="%.2f"
                     )
             
-            styler = _apply_table_styles(df, numeric_cols_for_style)
-
-            st.dataframe(
-                styler, 
-                hide_index=True, 
-                use_container_width=True,
-                column_config=column_config
-            )
+            
+            # Usar HTML renderizado para centrado correcto
+            html_table = render_styled_table(df, numeric_cols_for_style)
+            st.markdown(html_table, unsafe_allow_html=True)
     else:
         # Sin líneas (ej. Resultado Correcto)
         unique_outcomes = {}
@@ -224,16 +220,10 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
                  })
              
              df_rc = pd.DataFrame(data)
-             styler_rc = _apply_table_styles(df_rc, ["Cuota"])
-
-             st.dataframe(
-                 styler_rc, 
-                 hide_index=True, 
-                 use_container_width=True,
-                 column_config={
-                     "Cuota": st.column_config.NumberColumn(format="%.2f")
-                 }
-             )
+             
+             # Usar HTML renderizado para centrado correcto
+             html_table = render_styled_table(df_rc, ["Cuota"])
+             st.markdown(html_table, unsafe_allow_html=True)
         else:
              _render_as_card(label, final_outcomes, label_map)
     
