@@ -196,8 +196,17 @@ def _render_player_cards_markets(markets: list, home_team: str, away_team: str, 
 
     if other_markets:
         if player_list_markets: st.markdown("---")
+        
+        label_map = {
+            "1": home_team,
+            "X": "Empate",
+            "2": away_team,
+            "Yes": "Sí",
+            "No": "No"
+        }
+        
         for m in other_markets:
-            _render_as_card(m.get("label"), m.get("outcomes", []), {})
+            _render_as_card(m.get("label"), m.get("outcomes", []), label_map)
 
 
 def _render_generic_player_table(markets: list, title: str, 
@@ -338,11 +347,35 @@ def _render_player_assists(markets: list, home_team: str, away_team: str, home_i
     _render_generic_player_table(markets, "Asistencias", home_team, away_team, home_id, away_id, is_binary=True)
 
 def _render_player_goals(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
-    _render_generic_player_table(markets, "Goles del Jugador (2+ / Hat-trick)", home_team, away_team, home_id, away_id, is_binary=True)
+    """Renderiza mercados de goles extra (2+ / Hat-trick) como 'Cards' individuales."""
+    if not markets: return
+    
+    label_map = {
+        "Yes": "Sí", 
+        "No": "No",
+        "1": home_team,
+        "X": "Empate",
+        "2": away_team
+    }
+    
+    for m in markets:
+         # Ej: "Jugador marca 2 o más goles", "Hat-trick"
+        label = m.get("label", "Goles del Jugador")
+        _render_as_card(label, m.get("outcomes", []), label_map)
 
 def _render_goalkeeper_saves(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
-    _render_generic_player_table(markets, "Paradas del Portero", 
-                               home_team, away_team, home_id, away_id,
-                               val_col_name="Cantidad", 
-                               is_binary=False, 
-                               line_format_div_1000=True)
+    """Renderiza mercados de paradas como 'Cards' individuales (Petición usuario)."""
+    if not markets: return
+    
+    label_map = {
+        "Over": "Más de", 
+        "Under": "Menos de",
+        "1": home_team,
+        "X": "Empate",
+        "2": away_team
+    }
+    
+    for m in markets:
+        # Usar el label original del mercado (ej. "Paradas del portero - Rayo Vallecano")
+        label = m.get("label", "Paradas del Portero")
+        _render_as_card(label, m.get("outcomes", []), label_map)
