@@ -6,13 +6,15 @@ def _apply_table_styles(df: pd.DataFrame, numeric_cols: list = None):
     1. Centrado de encabezados y celdas.
     2. Mapa de calor (Heatmap) con degradado: Rojo (Min) -> Amarillo (Medio) -> Verde (Max).
     """
-    # Centrado CSS robusto
+    # Centrado CSS robusto con !important para todas las celdas y encabezados
     styler = df.style.set_properties(**{
-        'text-align': 'center', 
-        'vertical-align': 'middle'
+        'text-align': 'center !important', 
+        'vertical-align': 'middle !important'
     }).set_table_styles([
-        {'selector': 'th', 'props': [('text-align', 'center !important')]},
-        {'selector': 'td', 'props': [('text-align', 'center !important')]}
+        {'selector': 'th', 'props': [('text-align', 'center !important'), ('vertical-align', 'middle !important')]},
+        {'selector': 'td', 'props': [('text-align', 'center !important'), ('vertical-align', 'middle !important')]},
+        {'selector': 'th.col_heading', 'props': [('text-align', 'center !important')]},
+        {'selector': 'th.row_heading', 'props': [('text-align', 'center !important')]}
     ])
     
     if not numeric_cols:
@@ -101,4 +103,4 @@ def get_section_title_html(title: str) -> str:
     - Margen inferior: 4px
     - Fuente en negrita
     """
-    return f"<p style='margin-bottom:4px;font-weight:bold;'>{title}</p>"
+    return f"<p style='margin-bottom:4px;font-weight:bold;text-align:center;'>{title}</p>"
