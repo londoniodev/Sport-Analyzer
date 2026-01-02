@@ -92,3 +92,13 @@ def get_card_html(label: str, odds: float) -> str:
         <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
     </div>
     """
+
+def get_section_title_html(title: str) -> str:
+    """
+    Genera el HTML para un título de sección estandarizado.
+    
+    Estilo:
+    - Margen inferior: 4px
+    - Fuente en negrita
+    """
+    return f"<p style='margin-bottom:4px;font-weight:bold;'>{title}</p>"

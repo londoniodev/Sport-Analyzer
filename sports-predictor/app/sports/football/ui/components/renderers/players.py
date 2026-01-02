@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from ..styles import _apply_table_styles
+from ..styles import _apply_table_styles, get_section_title_html
 from .common import _render_as_card
 
 def _infer_team(outcome: dict, market_label: str, home_team: str, away_team: str, home_id=None, away_id=None) -> str:
@@ -50,7 +50,7 @@ def _render_scorers_markets(markets: list, home_team: str, away_team: str, home_
         st.info("No hay datos de goleadores disponibles.")
         return
 
-    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Goleadores</p>", unsafe_allow_html=True)
+    st.markdown(get_section_title_html("Goleadores"), unsafe_allow_html=True)
 
     # Helper para procesar
     def process_player(out, key_type):
@@ -153,7 +153,7 @@ def _render_player_cards_markets(markets: list, home_team: str, away_team: str, 
         
         data_list = list(players_data.values())
         if data_list:
-            st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Tarjetas de Jugadores</p>", unsafe_allow_html=True)
+            st.markdown(get_section_title_html("Tarjetas de Jugadores"), unsafe_allow_html=True)
             df = pd.DataFrame(data_list)
             
             if "Tarjeta" not in df.columns: df["Tarjeta"] = None
@@ -218,7 +218,7 @@ def _render_generic_player_table(markets: list, title: str,
     """Renderizador genérico para tablas de jugadores."""
     if not markets: return
 
-    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
+    st.markdown(get_section_title_html(title), unsafe_allow_html=True)
     
     players_data = []
     
@@ -349,7 +349,7 @@ def _render_player_specials(markets: list, home_team: str, away_team: str, home_
             
     if not data_map: return
     
-    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Apuestas Especiales Jugador</p>", unsafe_allow_html=True)
+    st.markdown(get_section_title_html("Apuestas Especiales Jugador"), unsafe_allow_html=True)
     df = pd.DataFrame(list(data_map.values()))
     
     for c in ["Asistencia", "Fuera Área", "Cabeza"]:

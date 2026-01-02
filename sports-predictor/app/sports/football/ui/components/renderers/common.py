@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from ..styles import _apply_table_styles, get_card_html
+from ..styles import _apply_table_styles, get_card_html, get_section_title_html
 from ..market_logic import _sort_markets_by_order, _get_market_format
 
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
@@ -51,7 +51,7 @@ def _render_category_markets(markets: list, home_team: str, away_team: str, orde
 
 def _render_as_card(label: str, outcomes: list, label_map: dict):
     """Renderiza mercado como cards horizontales."""
-    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+    st.markdown(get_section_title_html(label), unsafe_allow_html=True)
     
     unique_outcomes = {}
     for out in outcomes:
@@ -90,7 +90,7 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
     has_lines = any(out.get("line") for out in outcomes)
     
     if has_lines:
-        st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+        st.markdown(get_section_title_html(label), unsafe_allow_html=True)
         
         lines_data = {}
         processed_keys = set()
@@ -195,7 +195,7 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
         is_half_time_full_time = "descanso" in label_lower or "medio tiempo" in label_lower
         
         if is_result_correct or is_half_time_full_time:
-             st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+             st.markdown(get_section_title_html(label), unsafe_allow_html=True)
              
              if is_result_correct:
                  def get_score_sort_key(outcome):
