@@ -227,6 +227,10 @@ def _render_generic_player_table(markets: list, title: str,
         for out in m.get("outcomes", []):
             p_name = out.get("participant") or out.get("label")
             if not p_name: continue
+
+            # FILTRAR: Si el 'nombre' parece una línea de apuesta (Más de/Menos de), saltar
+            if "más de" in p_name.lower() or "menos de" in p_name.lower():
+                continue
             
             odds = out.get("odds")
             line = out.get("line")
