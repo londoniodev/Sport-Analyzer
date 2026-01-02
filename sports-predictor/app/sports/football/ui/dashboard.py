@@ -59,54 +59,91 @@ def show_dashboard():
     # ═══════════════════════════════════════════════════════
     st.markdown(f"### {render_icon('sync')} Sincronización de Datos", unsafe_allow_html=True)
     
-    # Build league options - dynamic from DB or fallback to hardcoded
-    if leagues_in_db:
-        regions = {}
-        for league in leagues_in_db:
-            region = league.region or "Other"
-            if region not in regions:
-                regions[region] = []
-            regions[region].append((league.id, f"{league.name} ({league.country})"))
-        
-        league_options = []
-        for region in sorted(regions.keys()):
-            for league_tuple in sorted(regions[region], key=lambda x: x[1]):
-                league_options.append(league_tuple)
-        available_regions = list(set([l.region for l in leagues_in_db if l.region]))
-    else:
-        league_options = [
-            (39, "Premier League (Inglaterra)"),
-            (140, "La Liga (España)"),
-            (135, "Serie A (Italia)"),
-            (78, "Bundesliga (Alemania)"),
-            (61, "Ligue 1 (Francia)"),
-            (2, "Champions League"),
-            (13, "Copa Libertadores"),
-            (239, "Liga BetPlay (Colombia)"),
-            (128, "Liga Argentina"),
-            (71, "Brasileirão"),
-            (253, "MLS (USA)"),
-            (262, "Liga MX"),
-            (3, "Europa League"),
-            (11, "Copa Sudamericana"),
-            (40, "Championship"),
-            (94, "Primeira Liga"),
-            (88, "Eredivisie"),
-        ]
-        available_regions = []
+    # Build league options - Merge DB with Static for better UX
+    static_leagues = [
+        (39, "Premier League", "England", "Europe"),
+        (140, "La Liga", "Spain", "Europe"),
+        (135, "Serie A", "Italy", "Europe"),
+        (78, "Bundesliga", "Germany", "Europe"),
+        (61, "Ligue 1", "France", "Europe"),
+        (2, "Champions League", "World", "Europe"),
+        (13, "Copa Libertadores", "South America", "South America"),
+        (239, "Liga BetPlay", "Colombia", "South America"),
+        (128, "Liga Profesional", "Argentina", "South America"),
+        (71, "Brasileirão", "Brazil", "South America"),
+        (253, "MLS", "USA", "North America"),
+        (262, "Liga MX", "Mexico", "North America"),
+        (3, "Europa League", "World", "Europe"),
+        (11, "Copa Sudamericana", "South America", "South America"),
+        (40, "Championship", "England", "Europe"),
+        (94, "Primeira Liga", "Portugal", "Europe"),
+        (88, "Eredivisie", "Netherlands", "Europe"),
+        (307, "Pro League", "Saudi Arabia", "Asia"),
+    ]
+
+    # Create a dict of existing leagues to avoid duplicates
+    db_league_ids = {l.id for l in leagues_in_db}
+    
+    # Start with DB leagues
+    final_options = []
+    
+    # Helper to format label
+    def format_league_label(name, country):
+        return f"{name} ({country})"
+
+    # Add DB leagues first
+    for league in leagues_in_db:
+        final_options.append({
+            "id": league.id,
+            "label": format_league_label(league.name, league.country),
+            "region": league.region or "Other"
+        })
+
+    # Add static leagues if not in DB
+    for lid, name, country, region in static_leagues:
+        if lid not in db_league_ids:
+            final_options.append({
+                "id": lid,
+                "label": format_league_label(name, country),
+                "region": region
+            })
+    
+    # Sort options
+    final_options.sort(key=lambda x: x["label"])
+    
+    # Prepare list for selectbox
+    league_options = [(opt["id"], opt["label"]) for opt in final_options]
+    
+    # Extract available regions for filtering
+    available_regions = sorted(list(set(opt["region"] for opt in final_options)))
 
     # Main sync card with expander for cleaner look
     with st.expander("Configuración de Descarga", expanded=True):
         
-        # Row 1: League and Season (2:1 ratio)
+        # Region Filter (Top for better flow)
+        selected_region = "Todas"
+        if available_regions:
+            col_filter, _ = st.columns([1, 2])
+            with col_filter:
+                selected_region = st.selectbox(
+                    "Filtrar por Región",
+                    options=["Todas"] + sorted(available_regions),
+                    index=0
+                )
+        
+        # Apply filter
+        filtered_options = league_options
+        if selected_region != "Todas":
+            filtered_options = [(opt["id"], opt["label"]) for opt in final_options if opt["region"] == selected_region]
+
+        # Row 1: League and Season
         col_league, col_season = st.columns([3, 1])
         
         with col_league:
             league_id = st.selectbox(
                 "Competición",
-                options=league_options,
+                options=filtered_options,
                 format_func=lambda x: x[1],
-                label_visibility="visible"
             )
         
         with col_season:
@@ -115,22 +152,9 @@ def show_dashboard():
                 options=[2026, 2025, 2024, 2023, 2022],
                 index=0
             )
-        
-        # Row 2: Region filter and Details checkbox (only if leagues exist)
-        if available_regions:
-            col_region, col_details = st.columns([2, 1])
-            with col_region:
-                selected_region = st.selectbox(
-                    "Filtrar por Región",
-                    options=["Todas"] + sorted(available_regions),
-                    index=0
-                )
-                if selected_region != "Todas":
-                    league_options = [(l.id, f"{l.name} ({l.country})") for l in leagues_in_db if l.region == selected_region]
-            with col_details:
-                sync_details = st.checkbox("Incluir Detalles", value=False, help="Descarga lineups y estadísticas de jugadores")
-        else:
-            sync_details = st.checkbox("Incluir Detalles (Alineaciones)", value=False, help="Descarga lineups y estadísticas de jugadores")
+
+        # Options
+        sync_details = st.checkbox("Incluir Detalles (Alineaciones)", value=False, help="Descarga lineups y estadísticas de jugadores")
         
         st.markdown("<br>", unsafe_allow_html=True)
         

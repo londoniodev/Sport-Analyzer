@@ -4,7 +4,7 @@ Football Analytics - Main analytics class implementing ISportAnalytics.
 from typing import Any, Dict
 from sqlmodel import Session
 from app.core.interfaces import ISportAnalytics
-from app.sports.football.analytics.team_stats import (
+from app.sports.football.analytics.data.team_stats import (
     get_team_corners_avg,
     get_team_corners_conceded_avg,
     get_team_possession_avg,

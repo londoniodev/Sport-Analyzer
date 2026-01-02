@@ -5,13 +5,13 @@ Loads teams and calculates stats from match history.
 import streamlit as st
 from sqlmodel import select
 from app.ui import render_probability_bar, render_metric_card, render_icon
-from app.sports.football.predictions import (
-    PoissonModel, GoalsPredictor, MatchResultPredictor,
-    CornersPredictor, HandicapPredictor, ExactScorePredictor, AdvancedPredictor
-)
+# from app.sports.football.predictions import (
+#     PoissonModel, GoalsPredictor, MatchResultPredictor,
+#     CornersPredictor, HandicapPredictor, ExactScorePredictor, AdvancedPredictor
+# )
 from app.core.database import get_session, is_demo_mode
 from app.sports.football.models import Team, League, Fixture
-from app.sports.football.analytics.team_stats import (
+from app.sports.football.analytics.data.team_stats import (
     get_team_corners_avg, get_team_corners_conceded_avg,
     get_team_possession_avg, get_team_cards_avg, get_team_shots_avg
 )

@@ -33,6 +33,7 @@ from .components.renderers.players import (
 from .components.styles import _apply_table_styles
 from app.sports.football.etl import FootballETL
 
+from app.sports.football.config.team_mapping import get_mapped_team_id
 
 def _render_debug_logs(markets):
     with st.expander("Logs del Sistema (Debug) - JSON CRUDO", expanded=False):
@@ -67,8 +68,24 @@ def show_match_detail_view():
     
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
-    home_id = details.get("home_id")
-    away_id = details.get("away_id")
+    
+    # --- ID RESOLUTION STRATEGY (FAIL-SAFE) ---
+    # Prioridad 1: Mapeo Manual (Garantiza ID correcto de API-Football)
+    mapped_home_id = get_mapped_team_id(home_team)
+    mapped_away_id = get_mapped_team_id(away_team)
+    
+    # Scraper IDs (Internal Kambi IDs - a menudo incompatibles con API-Football)
+    scraper_home_id = details.get("home_id")
+    scraper_away_id = details.get("away_id")
+    
+    # Asignación final con preferencia al Mapa
+    home_id = mapped_home_id if mapped_home_id else scraper_home_id
+    away_id = mapped_away_id if mapped_away_id else scraper_away_id
+    
+    # Debug info para el usuario si hay discrepancia
+    if mapped_home_id and scraper_home_id and mapped_home_id != scraper_home_id:
+        # Esto confirma que el mapa corrigió el ID
+        pass 
     markets_raw = details.get("markets", {})
     
     # --- FILA DE BOTONES DE ACCIÓN ---
@@ -98,8 +115,8 @@ def show_match_detail_view():
         else:
             st.error("⚠️ No se detectaron IDs de equipos. El botón de descarga está deshabilitado.")
             with st.expander("Ver IDs Detectados (Debug)"):
-                st.write(f"Home: {home_team} (ID: {home_id})")
-                st.write(f"Away: {away_team} (ID: {away_id})")
+                st.write(f"**Home:** {home_team} | ID: `{home_id}` {'(Mapeado)' if mapped_home_id else '(Scraper)'}")
+                st.write(f"**Away:** {away_team} | ID: `{away_id}` {'(Mapeado)' if mapped_away_id else '(Scraper)'}")
 
     with col_a:
         do_analysis = st.toggle("📈 Mostrar Análisis Dinámico", 
