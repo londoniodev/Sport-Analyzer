@@ -117,7 +117,7 @@ def get_card_html(label: str, odds: float) -> str:
     - Cuota verde neón (#22c55e) grande y negrita
     """
     return f"""
-    <div style="background:#0E1117;border:1px solid #2d5a87;border-radius:8px;padding:10px;text-align:center;margin:2px;height:100%;">
+    <div style="background:#0E1117;border:1px solid #4a5568;border-radius:8px;padding:10px;text-align:center;margin:2px;height:100%;">
         <div style="color:#ffffff;font-size:11px;line-height:1.2;margin-bottom:4px;">{label}</div>
         <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
     </div>

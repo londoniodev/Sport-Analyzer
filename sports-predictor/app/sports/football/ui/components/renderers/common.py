@@ -174,9 +174,14 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
                     )
             
             
-            # Usar HTML renderizado para centrado correcto
-            html_table = render_styled_table(df, numeric_cols_for_style)
-            st.markdown(html_table, unsafe_allow_html=True)
+            styler = _apply_table_styles(df, numeric_cols_for_style)
+
+            st.dataframe(
+                styler, 
+                hide_index=True, 
+                use_container_width=True,
+                column_config=column_config
+            )
     else:
         # Sin líneas (ej. Resultado Correcto)
         unique_outcomes = {}
@@ -220,10 +225,16 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
                  })
              
              df_rc = pd.DataFrame(data)
-             
-             # Usar HTML renderizado para centrado correcto
-             html_table = render_styled_table(df_rc, ["Cuota"])
-             st.markdown(html_table, unsafe_allow_html=True)
+             styler_rc = _apply_table_styles(df_rc, ["Cuota"])
+
+             st.dataframe(
+                 styler_rc, 
+                 hide_index=True, 
+                 use_container_width=True,
+                 column_config={
+                     "Cuota": st.column_config.NumberColumn(format="%.2f")
+                 }
+             )
         else:
              _render_as_card(label, final_outcomes, label_map)
     
