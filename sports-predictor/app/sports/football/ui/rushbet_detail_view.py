@@ -41,6 +41,7 @@ ORDEN_MEDIO_TIEMPO = [
     ("descanso", "card"),
     ("1° parte", "card"),
     ("1ª parte", "card"),
+    ("1.ª parte", "card"),
     ("apuesta sin empate", "card"),
     ("doble oportunidad", "card"),
     ("ambos equipos marcarán", "card"),
@@ -49,6 +50,7 @@ ORDEN_MEDIO_TIEMPO = [
     ("resultado correcto", "list"),
     ("2° parte", "card"),
     ("2ª parte", "card"),
+    ("2.ª parte", "card"),
 ]
 
 # Orden dentro de Tiros de Esquina
@@ -208,25 +210,10 @@ def show_match_detail_view():
                     with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
                         _render_category_markets(cat_markets, home_team, away_team, orden)
 
-    # --- DEBUG LOGS (Solicitado por usuario) ---
-    with st.expander("Logs del Sistema (Debug) - LABELS CRUDOS", expanded=True):
-        st.markdown("### Categorías Crudas desde la API")
-        
-        # Recopilar todos los labels crudos organizados por su categoría actual
-        raw_labels_by_cat = {}
-        for cat, market_list in markets.items():
-            labels = [m["label"] for m in market_list]
-            if labels:
-                raw_labels_by_cat[cat] = labels
-        
-        st.write(raw_labels_by_cat)
-        
-        st.markdown("---")
-        st.markdown("### Lista Plana de Todos los Labels Encontrados")
-        all_labels = []
-        for m_list in markets.values():
-            all_labels.extend([m["label"] for m in m_list])
-        st.code("\n".join(sorted(all_labels)))
+    # --- DEBUG LOGS (Opcional - desactivado por defecto para prod) ---
+    # with st.expander("Logs del Sistema (Debug)", expanded=False):
+    #     debug_counts = {k: len(v) for k, v in markets.items() if v}
+    #     st.json(debug_counts)
 
 
 def _sort_markets_by_order(markets: list, orden: list) -> list:
