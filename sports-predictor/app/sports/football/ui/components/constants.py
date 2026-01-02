@@ -34,142 +34,130 @@ def get_dynamic_order(home_team: str, away_team: str):
     h = home_team.lower()
     a = away_team.lower()
     
-    # 1. TIEMPO REGLAMENTARIO
+    # 1. TIEMPO REGLAMENTARIO (orden exacto del usuario)
     orden_tiempo_reg = [
         ("resultado final", CARD),
-        ("1x2", CARD),
-        ("total de goles", LIST), 
+        ("total de goles", LIST),
         ("doble oportunidad", CARD),
         ("ambos equipos marcarán", CARD),
-        ("ambos equipos", CARD),
         ("resultado correcto", LIST),
-        ("marcador correcto", LIST),
         ("apuesta sin empate", CARD),
-        
         (f"total de goles de {h}", LIST),
         (f"total de goles de {a}", LIST),
-        
-        ("descanso/tiempo", LIST),
-        ("medio tiempo/final", LIST),
-        ("hándicap", LIST),
-        ("handicap", LIST),
-        
-        (f"victoria de {h} y ambos", CARD),
-        (f"victoria de {a} y ambos", CARD),
-        
+        ("descanso/tiempo reglamentario", LIST),
+        ("hándicap ", LIST),
+        (f"victoria de {h} y ambos equipos marcan", CARD),
+        (f"victoria de {a} y ambos equipos marcan", CARD),
         ("gol en ambas mitades", CARD),
     ]
 
-    # 2. MEDIO TIEMPO
+    # 2. MEDIO TIEMPO (orden exacto del usuario)
     orden_medio_tiempo = [
         ("descanso", CARD),
-        ("apuesta sin empate - 1", CARD), 
-        ("apuesta sin empate -1", CARD),
+        ("apuesta sin empate - 1", CARD),
+        ("apuesta sin empate - 1.ª parte", CARD),
         ("doble oportunidad - 1", CARD),
-        ("doble oportunidad -1", CARD),
+        ("doble oportunidad - 1.ª parte", CARD),
         ("ambos equipos marcarán - 1", CARD),
+        ("ambos equipos marcarán - 1.ª parte", CARD),
         ("total de goles - 1", LIST),
-        
-        (f"total de goles de {h} - 1", LIST),
-        (f"total de goles de {a} - 1", LIST),
-        
+        ("total de goles - 1.ª parte", LIST),
+        (f"total de goles de {h} - 1ª mitad", LIST),
+        (f"total de goles de {a} - 1ª mitad", LIST),
         ("resultado correcto - 1", LIST),
-        
-        ("2° parte", CARD),
+        ("resultado correcto - 1.ª parte", LIST),
         ("2ª parte", CARD),
         ("2.ª parte", CARD),
-        
         ("apuesta sin empate - 2", CARD),
+        ("apuesta sin empate - 2.ª parte", CARD),
         ("doble oportunidad - 2", CARD),
+        ("doble oportunidad - 2.ª parte", CARD),
         ("ambos equipos marcarán - 2", CARD),
-        
+        ("ambos equipos marcarán - 2.ª parte", CARD),
         ("total de goles - 2", LIST),
-        (f"total de goles de {h} - 2", LIST),
-        (f"total de goles de {a} - 2", LIST),
+        ("total de goles - 2.ª parte", LIST),
+        (f"total de goles de {h} - 2ª mitad", LIST),
+        (f"total de goles de {a} - 2ª mitad", LIST),
     ]
 
-    # 3. CORNERS
+    # 3. TIROS DE ESQUINA (orden exacto del usuario)
     orden_corners = [
-        ("total de tiros de esquina", LIST), 
-        ("total de esquina", LIST),
-        
-        (f"esquina a favor de {h}", LIST),
-        (f"esquina a favor de {a}", LIST),
-        
+        ("total de tiros de esquina", LIST),
+        (f"total de tiros de esquina a favor de {h}", LIST),
+        (f"total de tiros de esquina a favor de {a}", LIST),
         ("más tiros de esquina", CARD),
-        ("mas tiros de esquina", CARD),
-        ("más córners", CARD),
-        
-        ("hándicap de tiros de esquina", LIST),
-        ("handicap de esquina", LIST),
-        
+        ("hándicap de tiros de esquina 3-way", LIST),
         ("siguiente tiro de esquina", CARD),
-        
-        # Mitades
         ("total de tiros de esquina - 1", LIST),
-        (f"esquina por parte de {h} - 1", LIST),
-        (f"esquina por parte de {a} - 1", LIST),
-        
+        ("total de tiros de esquina - 1.ª parte", LIST),
+        (f"número total de tiros de esquina por parte de {h} - 1ª parte", LIST),
+        (f"número total de tiros de esquina por parte de {a} - 1ª parte", LIST),
         ("total de tiros de esquina - 2", LIST),
-        (f"esquina a favor de {h} - 2", LIST),
-        (f"esquina a favor de {a} - 2", LIST),
-        
+        ("total de tiros de esquina - 2.ª parte", LIST),
+        (f"número total de tiros de esquina por parte de {h} - 2ª parte", LIST),
+        (f"número total de tiros de esquina por parte de {a} - 2ª parte", LIST),
         ("más córners - 1", CARD),
+        ("más córners - 1.ª parte", CARD),
         ("más córners - 2", CARD),
+        ("más córners - 2.ª parte", CARD),
     ]
 
-    # 4. PARTIDO Y TARJETAS
+    # 4. PARTIDO Y TARJETAS DEL EQUIPO (orden exacto del usuario)
     orden_tarjetas = [
-        ("total de tarjetas", LIST), 
-        (f"total de tarjeta {h}", LIST),
-        (f" - {h}", LIST), 
-        (f"total de tarjeta {a}", LIST),
-        (f" - {a}", LIST),
-        
+        ("total de tarjetas", LIST),
+        (f"total de tarjetas - {h}", LIST),
+        (f"total de tarjetas - {a}", LIST),
         ("tarjeta roja mostrada", CARD),
         (f"tarjeta roja a {h}", CARD),
         (f"tarjeta roja a {a}", CARD),
-        
         ("más tarjetas", CARD),
-        ("tarjetas hándicap", LIST),
+        ("tarjetas hándicap 3-way", LIST),
     ]
 
-    # 5. DISPAROS EQUIPO
+    # 5. PARTIDO Y DISPAROS DEL EQUIPO (orden exacto del usuario)
     orden_disparos = [
-        ("número total de disparos", LIST),
-        ("número total de tiros", LIST),
-        ("tiros a puerta", LIST),
-        
-        (f"tiros a puerta por parte de {h}", LIST),
-        (f"por parte de {h}", LIST),
-        
-        (f"tiros a puerta por parte de {a}", LIST),
-        (f"por parte de {a}", LIST),
-        
+        ("número total de disparos a puerta", LIST),
+        (f"número total de tiros a puerta por parte de {h}", LIST),
+        (f"número total de tiros a puerta por parte de {a}", LIST),
         ("más tiros a puerta", CARD),
     ]
-
-    # 6. EVENTOS
-    orden_eventos = [
-        ("primer gol", CARD),
-        ("propia meta", CARD),
-        (f"victoria de {h} sin recibir", CARD),
-        (f"victoria de {a} sin recibir", CARD),
-        (f"{h} gana al menos", CARD),
-        (f"{a} gana al menos", CARD),
-        ("al palo", CARD),
-    ]
     
-    # Static ones
+    # 6. PARTIDO Y FALTAS DEL EQUIPO
+    orden_faltas = [
+        ("faltas concedidas", LIST),
+        (f"número total de faltas cometidas por {h}", LIST),
+        (f"número total de faltas cometidas por {a}", LIST),
+    ]
+
+    # 7. HANDICAP 3-WAY (orden exacto del usuario)
+    # Columnas: Comienza con, Equipo Local, Equipo Visitante, Empate
     orden_handicap_3way = [
         ("hándicap 3-way", LIST),
         ("handicap 3-way", LIST),
     ]
     
+    # 8. LINEAS ASIATICAS (orden exacto del usuario)
     orden_asiaticas = [
         ("hándicap asiático", LIST),
         ("handicap asiático", LIST),
         ("total asiático", LIST),
+        ("hándicap asiático - 1", LIST),
+        ("hándicap asiático - 1.ª parte", LIST),
+        ("total asiático - 1", LIST),
+        ("total asiático - 1.ª parte", LIST),
+    ]
+
+    # 9. EVENTOS DEL PARTIDO (orden exacto del usuario)
+    orden_eventos = [
+        ("primer gol", CARD),
+        ("gol en propia meta", CARD),
+        (f"victoria de {h} sin recibir goles en contra", CARD),
+        (f"victoria de {a} sin recibir goles en contra", CARD),
+        (f"{h} gana al menos una mitad", CARD),
+        (f"{a} gana al menos una mitad", CARD),
+        ("al palo durante el partido", CARD),
+        (f"{h} al palo durante el partido", CARD),
+        (f"{a} al palo durante el partido", CARD),
     ]
 
     return {
@@ -178,7 +166,9 @@ def get_dynamic_order(home_team: str, away_team: str):
         "corners": orden_corners,
         "tarjetas_equipo": orden_tarjetas,
         "disparos_equipo": orden_disparos,
+        "faltas_equipo": orden_faltas,
         "eventos_partido": orden_eventos,
         "handicap_3way": orden_handicap_3way,
         "lineas_asiaticas": orden_asiaticas,
     }
+
