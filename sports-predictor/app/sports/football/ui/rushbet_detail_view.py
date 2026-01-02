@@ -6,7 +6,7 @@ Muestra mercados de apuestas organizados según especificación exacta.
 import streamlit as st
 import pandas as pd
 from app.services.rushbet_api import RushbetClient
-from app.ui.theme import render_icon
+from app.ui import render_icon
 
 # Componentes refactorizados
 from .components.constants import (
@@ -67,6 +67,8 @@ def show_match_detail_view():
     
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
+    home_id = details.get("home_id")
+    away_id = details.get("away_id")
     markets_raw = details.get("markets", {})
     
     # --- PROCESAMIENTO Y LIMPIEZA DE MERCADOS ---
@@ -105,22 +107,44 @@ def show_match_detail_view():
     with tabs[1]:
         # Orden específico solicitado:
         # Disparos, Goleador, Tarjetas, Especiales, Asistencias, Goles, Paradas
-        player_cats_order = [
-            ("disparos_jugador", _render_player_shots),
-            ("goleador", _render_scorers_markets),
-            ("tarjetas_jugador", _render_player_cards_markets),
-            ("apuestas_especiales_jugador", _render_player_specials),
-            ("asistencias_jugador", _render_player_assists),
-            ("goles_jugador", _render_player_goals),
-            ("paradas_portero", _render_goalkeeper_saves)
-        ]
+        # Nota: Actualizado para pasar home_team y away_team a funciones que lo requieran
         
         has_players = False
-        for key, render_func in player_cats_order:
-            mkts = markets.get(key, [])
-            if mkts:
-                has_players = True
-                render_func(mkts)
+        
+        # Disparos
+        if "disparos_jugador" in markets:
+            _render_player_shots(markets["disparos_jugador"], home_team, away_team, home_id, away_id)
+            has_players = True
+            
+        # Goleador
+        if "goleador" in markets:
+            _render_scorers_markets(markets["goleador"], home_team, away_team, home_id, away_id)
+            has_players = True
+            
+        # Tarjetas
+        if "tarjetas_jugador" in markets:
+            _render_player_cards_markets(markets["tarjetas_jugador"], home_team, away_team, home_id, away_id)
+            has_players = True
+            
+        # Especiales
+        if "apuestas_especiales_jugador" in markets:
+            _render_player_specials(markets["apuestas_especiales_jugador"], home_team, away_team, home_id, away_id)
+            has_players = True
+            
+        # Asistencias
+        if "asistencias_jugador" in markets:
+            _render_player_assists(markets["asistencias_jugador"], home_team, away_team, home_id, away_id)
+            has_players = True
+
+        # Goles
+        if "goles_jugador" in markets:
+            _render_player_goals(markets["goles_jugador"], home_team, away_team, home_id, away_id)
+            has_players = True
+
+        # Paradas
+        if "paradas_portero" in markets:
+            _render_goalkeeper_saves(markets["paradas_portero"], home_team, away_team, home_id, away_id)
+            has_players = True
                 
         if not has_players:
             st.info("No hay mercados de jugadores disponibles.")

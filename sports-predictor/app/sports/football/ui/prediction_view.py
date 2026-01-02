@@ -4,7 +4,7 @@ Loads teams and calculates stats from match history.
 """
 import streamlit as st
 from sqlmodel import select
-from app.ui.theme import render_probability_bar, render_metric_card, render_icon
+from app.ui import render_probability_bar, render_metric_card, render_icon
 from app.sports.football.predictions import (
     PoissonModel, GoalsPredictor, MatchResultPredictor,
     CornersPredictor, HandicapPredictor, ExactScorePredictor, AdvancedPredictor

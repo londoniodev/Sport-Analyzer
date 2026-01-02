@@ -3,7 +3,31 @@ import pandas as pd
 from ..styles import _apply_table_styles
 from .common import _render_as_card
 
-def _render_scorers_markets(markets: list):
+def _infer_team(outcome: dict, market_label: str, home_team: str, away_team: str, home_id=None, away_id=None) -> str:
+    """Intenta inferir el equipo del jugador basado en datos disponibles."""
+    # 1. ID Match (Prioridad)
+    epid = outcome.get("eventParticipantId")
+    if epid:
+        if epid == home_id: return home_team
+        if epid == away_id: return away_team
+
+    # 2. Directamente del outcome (si la API lo provee)
+    # Kambi a veces usa 'competitorName' o 'team' en el outcome
+    if "team" in outcome: return outcome["team"]
+    if "competitorName" in outcome: return outcome["competitorName"]
+    
+    # 3. Contexto del Label del Mercado
+    # Ej: "Goleador - Real Madrid"
+    lbl_lower = market_label.lower()
+    if home_team.lower() in lbl_lower: return home_team
+    if away_team.lower() in lbl_lower: return away_team
+    
+    # 3. Contexto del Criterio (si existe en outcome)
+    # A veces hay field 'criterion' -> 'label'
+    
+    return "-"
+
+def _render_scorers_markets(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     """Renderiza tabla consolidada de goleadores (Primer Gol + Marcará)."""
     players_data = {}
     
@@ -13,9 +37,14 @@ def _render_scorers_markets(markets: list):
     for m in markets:
         lbl = m.get("label", "").lower()
         if "primer" in lbl and "goleador" in lbl:
-            first_scorer_mkt.extend(m.get("outcomes", []))
+            # Pasar contexto del mercado a los outcomes temporalmente si es necesario
+            for out in m.get("outcomes", []):
+                out["_market_label"] = m.get("label", "")
+                first_scorer_mkt.append(out)
         elif "marca" in lbl or "marcará" in lbl or "cualquier momento" in lbl:
-            anytime_scorer_mkt.extend(m.get("outcomes", []))
+            for out in m.get("outcomes", []):
+                out["_market_label"] = m.get("label", "")
+                anytime_scorer_mkt.append(out)
             
     if not first_scorer_mkt and not anytime_scorer_mkt:
         st.info("No hay datos de goleadores disponibles.")
@@ -23,24 +52,31 @@ def _render_scorers_markets(markets: list):
 
     st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Goleadores</p>", unsafe_allow_html=True)
 
-    for out in first_scorer_mkt:
+    # Helper para procesar
+    def process_player(out, key_type):
         name = out.get("participant") or out.get("label")
-        if not name: continue
+        if not name: return
         
+        if "ningún" in name.lower() or (name == "Sí" and key_type == "Marcará"):
+             return
+
         if name not in players_data:
-            players_data[name] = {"Jugador": name, "Primer Gol": None, "Marcará": None}
-        players_data[name]["Primer Gol"] = out.get("odds")
+            # Inferir equipo solo la primera vez
+            team = _infer_team(out, out.get("_market_label", ""), home_team, away_team, home_id, away_id)
+            players_data[name] = {"Equipo": team, "Jugador": name, "Primer Gol": None, "Marcará": None}
+        
+        # Si ya existe pero no tiene equipo, intentar inferir de nuevo (quizas este outcome si tiene info)
+        if players_data[name]["Equipo"] == "-":
+             team = _infer_team(out, out.get("_market_label", ""), home_team, away_team, home_id, away_id)
+             if team != "-": players_data[name]["Equipo"] = team
+             
+        players_data[name][key_type] = out.get("odds")
+
+    for out in first_scorer_mkt:
+        process_player(out, "Primer Gol")
 
     for out in anytime_scorer_mkt:
-        name = out.get("participant") or out.get("label")
-        if not name: continue
-        
-        if "ningún" in name.lower() or name == "Sí":
-             continue
-
-        if name not in players_data:
-            players_data[name] = {"Jugador": name, "Primer Gol": None, "Marcará": None}
-        players_data[name]["Marcará"] = out.get("odds")
+         process_player(out, "Marcará")
     
     data_list = list(players_data.values())
     if not data_list: return
@@ -51,8 +87,10 @@ def _render_scorers_markets(markets: list):
     df["_sort_any"] = df["Marcará"].fillna(9999)
     df = df.sort_values(by=["_sort_first", "_sort_any"])
     
-    cols = ["Jugador", "Primer Gol", "Marcará"]
-    final_df = df[cols]
+    cols = ["Equipo", "Jugador", "Primer Gol", "Marcará"]
+    final_df = df[list(set(cols) & set(df.columns))]
+    # Reordenar forzoso
+    final_df = final_df[cols] if set(cols).issubset(df.columns) else final_df
     
     numeric_cols = ["Primer Gol", "Marcará"]
     styler = _apply_table_styles(final_df, numeric_cols)
@@ -75,7 +113,7 @@ def _render_scorers_markets(markets: list):
     st.markdown("")
 
 
-def _render_player_cards_markets(markets: list):
+def _render_player_cards_markets(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     """Renderiza mercados de tarjetas de jugadores en tabla consolidada."""
     player_list_markets = []
     other_markets = []
@@ -108,7 +146,8 @@ def _render_player_cards_markets(markets: list):
                     continue
                     
                 if p_name not in players_data:
-                    players_data[p_name] = {"Jugador": p_name}
+                    team = _infer_team(out, raw_label, home_team, away_team, home_id, away_id)
+                    players_data[p_name] = {"Equipo": team, "Jugador": p_name}
                 
                 players_data[p_name][col_name] = out.get("odds")
         
@@ -120,7 +159,7 @@ def _render_player_cards_markets(markets: list):
             if "Tarjeta" not in df.columns: df["Tarjeta"] = None
             if "Roja" not in df.columns: df["Roja"] = None
             
-            cols_to_show = ["Jugador"]
+            cols_to_show = ["Equipo", "Jugador"]
             numeric_cols = []
             
             if df["Tarjeta"].notna().any():
@@ -162,6 +201,8 @@ def _render_player_cards_markets(markets: list):
 
 
 def _render_generic_player_table(markets: list, title: str, 
+                               home_team: str, away_team: str,
+                               home_id=None, away_id=None,
                                val_col_name: str = "Total", 
                                is_binary: bool = False,
                                line_format_div_1000: bool = False):
@@ -173,6 +214,7 @@ def _render_generic_player_table(markets: list, title: str,
     players_data = []
     
     for m in markets:
+        m_label = m.get("label", "")
         for out in m.get("outcomes", []):
             p_name = out.get("participant") or out.get("label")
             if not p_name: continue
@@ -180,7 +222,8 @@ def _render_generic_player_table(markets: list, title: str,
             odds = out.get("odds")
             line = out.get("line")
             
-            row = {"Equipo": "-", "Jugador": p_name}
+            team = _infer_team(out, m_label, home_team, away_team, home_id, away_id)
+            row = {"Equipo": team, "Jugador": p_name}
             
             if not is_binary:
                 if line is not None:
@@ -209,6 +252,14 @@ def _render_generic_player_table(markets: list, title: str,
     numeric_cols = ["Valor de la apuesta", "Sí"]
     valid_numerics = [c for c in numeric_cols if c in df.columns]
     
+    # Reordenar columnas para que Equipo sea la primera
+    cols = list(df.columns)
+    if "Equipo" in cols:
+        cols.insert(0, cols.pop(cols.index("Equipo")))
+        if "Jugador" in cols:
+             cols.insert(1, cols.pop(cols.index("Jugador")))
+    df = df[cols]
+
     styler = _apply_table_styles(df, valid_numerics)
     
     col_config = {}
@@ -228,17 +279,19 @@ def _render_generic_player_table(markets: list, title: str,
     st.markdown("")
 
 
-def _render_player_shots(markets: list):
+def _render_player_shots(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     _render_generic_player_table(markets, "Disparos a Puerta", 
+                               home_team, away_team, home_id, away_id,
                                val_col_name="Cantidad", 
                                is_binary=False, 
                                line_format_div_1000=True)
 
-def _render_player_specials(markets: list):
+def _render_player_specials(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     data_map = {}
     
     for m in markets:
         lbl = m.get("label", "").lower()
+        m_label = m.get("label", "")
         
         tipo = None
         if "asistencia" in lbl: tipo = "Asistencia"
@@ -252,7 +305,8 @@ def _render_player_specials(markets: list):
             if not p_name: continue
             
             if p_name not in data_map:
-                data_map[p_name] = {"Jugador": p_name}
+                team = _infer_team(out, m_label, home_team, away_team, home_id, away_id)
+                data_map[p_name] = {"Equipo": team, "Jugador": p_name}
             
             data_map[p_name][tipo] = out.get("odds")
             
@@ -264,7 +318,7 @@ def _render_player_specials(markets: list):
     for c in ["Asistencia", "Fuera Área", "Cabeza"]:
         if c not in df.columns: df[c] = None
         
-    final_cols = ["Jugador", "Asistencia", "Fuera Área", "Cabeza"]
+    final_cols = ["Equipo", "Jugador", "Asistencia", "Fuera Área", "Cabeza"]
     df = df[[c for c in final_cols if c in df.columns]]
     
     numerics = ["Asistencia", "Fuera Área", "Cabeza"]
@@ -280,14 +334,15 @@ def _render_player_specials(markets: list):
         height=(len(df)+1)*35+3
     )
 
-def _render_player_assists(markets: list):
-    _render_generic_player_table(markets, "Asistencias", is_binary=True)
+def _render_player_assists(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
+    _render_generic_player_table(markets, "Asistencias", home_team, away_team, home_id, away_id, is_binary=True)
 
-def _render_player_goals(markets: list):
-    _render_generic_player_table(markets, "Goles del Jugador (2+ / Hat-trick)", is_binary=True)
+def _render_player_goals(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
+    _render_generic_player_table(markets, "Goles del Jugador (2+ / Hat-trick)", home_team, away_team, home_id, away_id, is_binary=True)
 
-def _render_goalkeeper_saves(markets: list):
+def _render_goalkeeper_saves(markets: list, home_team: str, away_team: str, home_id=None, away_id=None):
     _render_generic_player_table(markets, "Paradas del Portero", 
+                               home_team, away_team, home_id, away_id,
                                val_col_name="Cantidad", 
                                is_binary=False, 
                                line_format_div_1000=True)

@@ -170,6 +170,8 @@ class RushbetClient:
             "start_time": event_info.get("start"),
             "state": event_info.get("state", "NOT_STARTED"),
             "score": event_info.get("score", {}),
+            "home_id": None,
+            "away_id": None,
             "markets": {
                 # Tab: Partido
                 "tiempo_reglamentario": [],
@@ -206,7 +208,8 @@ class RushbetClient:
                 "line": out.get("line"),
                 "type": out.get("type"),
                 "participant": out.get("participant"),
-                "participant_name": out.get("participantName")
+                "participant_name": out.get("participantName"),
+                "eventParticipantId": out.get("eventParticipantId")
             } for out in outcomes]
             
             market_data = {
@@ -219,7 +222,21 @@ class RushbetClient:
             category = self._categorize_market(offer_label, outcomes)
             if category in result["markets"]:
                 result["markets"][category].append(market_data)
-        
+            # Intento de extraer IDs de equipos (Heurística: Match Winner)
+            # Buscamos un mercado que tenga 3 outcomes y cuyos labels coincidan con los nombres de equipos
+            if not result["home_id"] or not result["away_id"]:
+                 # Solo si tenemos labels claros
+                 if len(outcomes) == 3: # 1X2 market candidate
+                     for out in outcomes:
+                         lbl = out.get("label", "")
+                         epid = out.get("eventParticipantId")
+                         if not epid: continue
+                         
+                         if lbl == home_team:
+                             result["home_id"] = epid
+                         elif lbl == away_team:
+                             result["away_id"] = epid
+                             
         return result
     
     def _categorize_market(self, label: str, outcomes: list) -> str:

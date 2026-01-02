@@ -6,7 +6,7 @@ Muestra tabla de eventos con opción de navegar al detalle de cada partido.
 import streamlit as st
 import pandas as pd
 from app.services.rushbet_api import RushbetClient
-from app.ui.theme import render_icon
+from app.ui import render_icon
 from app.sports.football.ui.rushbet_detail_view import show_match_detail_view
 
 

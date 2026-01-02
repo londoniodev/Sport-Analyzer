@@ -2,7 +2,7 @@
 Football Dashboard - Modern UI for Data Management with Dynamic League Selector.
 """
 import streamlit as st
-from app.ui.theme import render_metric_card, render_icon
+from app.ui import render_metric_card, render_icon
 from app.core.database import get_session
 from app.sports.football.models import Fixture, Team, Player, League, Injury
 from sqlmodel import select, func

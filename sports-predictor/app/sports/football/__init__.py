@@ -9,7 +9,7 @@ from app.sports.football.models import (
     League, Team, Player, Coach, Fixture, TeamMatchStats, PlayerMatchStats,
     PlayerSeasonStats, Injury
 )
-from app.sports.football.api_client import FootballAPIClient
+from app.sports.football.api import FootballAPIClient
 from app.sports.football.etl import FootballETL
 from app.sports.football.analytics import FootballAnalytics
 from app.sports.football.ui.dashboard import show_dashboard

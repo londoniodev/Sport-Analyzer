@@ -10,12 +10,12 @@ from typing import Any, Dict, List, Optional, Generator
 from sqlmodel import Session, select
 from app.core.interfaces import ISportETL
 from app.core.database import get_session
-from app.sports.football.api_client import FootballAPIClient
+from app.sports.football.api import FootballAPIClient
 from app.sports.football.models import (
     League, Team, Player, Coach, Fixture, TeamMatchStats, PlayerMatchStats, Injury
 )
 # Configuración de ligas centralizada - editar league_config.py para agregar/quitar ligas
-from app.sports.football.league_config import (
+from app.sports.football.config.leagues import (
     PRIORITY_LEAGUES, ALLOWED_LEAGUE_IDS, REGION_MAP, get_region
 )
 

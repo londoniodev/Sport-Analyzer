@@ -15,8 +15,8 @@ if str(ROOT_DIR) not in sys.path:
 import streamlit as st
 from app.core.database import init_db
 from app.core.registry import SportRegistry
-from app.ui.theme import get_theme_css, render_icon, render_feature_card
-from app.ui.nav import render_bottom_nav
+from app.ui import get_theme_css, render_icon, render_feature_card
+from app.ui.components.nav import render_bottom_nav
 import app.sports.football # Trigger registration
 
 
