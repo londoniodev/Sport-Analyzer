@@ -263,11 +263,154 @@ def show_match_detail_view():
                 
                 if cat_markets:
                     cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
+                if cat_markets:
+                    cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
                     with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
-                        _render_category_markets(cat_markets, home_team, away_team, orden)
+                        if cat_key == "goleador":
+                            _render_scorers_markets(cat_markets)
+                        elif cat_key == "tarjetas_jugador":
+                            _render_player_cards_markets(cat_markets)
+                        else:
+                            _render_category_markets(cat_markets, home_team, away_team, orden)
 
     # --- DEBUG LOGS DETALLADOS ---
     _render_debug_logs(markets)
+
+
+def _render_scorers_markets(markets: list):
+    """Renderiza tabla consolidada de goleadores (Primer Gol + Marcará)."""
+    # 1. Extraer datos
+    players_data = {}
+    
+    # Identificar mercados
+    first_scorer_mkt = []
+    anytime_scorer_mkt = []
+    
+    for m in markets:
+        lbl = m.get("label", "").lower()
+        if "primer" in lbl and "goleador" in lbl:
+            first_scorer_mkt.extend(m.get("outcomes", []))
+        elif "marca" in lbl or "marcará" in lbl or "cualquier momento" in lbl:
+            anytime_scorer_mkt.extend(m.get("outcomes", []))
+            
+    if not first_scorer_mkt and not anytime_scorer_mkt:
+        st.info("No hay datos de goleadores disponibles.")
+        return
+
+    # Título unificado
+    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Goleadores</p>", unsafe_allow_html=True)
+
+    # 2. Procesar Primer Goleador
+    for out in first_scorer_mkt:
+        name = out.get("label")
+        if name not in players_data:
+            players_data[name] = {"Jugador": name, "Primer Gol": None, "Marcará": None}
+        players_data[name]["Primer Gol"] = out.get("odds")
+
+    # 3. Procesar Marcará
+    for out in anytime_scorer_mkt:
+        name = out.get("label")
+        if name not in players_data:
+            players_data[name] = {"Jugador": name, "Primer Gol": None, "Marcará": None}
+        players_data[name]["Marcará"] = out.get("odds")
+    
+    # 4. Crear DataFrame
+    data_list = list(players_data.values())
+    if not data_list:
+        return
+        
+    df = pd.DataFrame(data_list)
+    
+    # Ordenar: Prioridad a quienes tienen cuota de Primer Gol más baja, luego Marcará
+    df["_sort_first"] = df["Primer Gol"].fillna(9999)
+    df["_sort_any"] = df["Marcará"].fillna(9999)
+    df = df.sort_values(by=["_sort_first", "_sort_any"])
+    
+    # Seleccionar columnas finales
+    cols = ["Jugador", "Primer Gol", "Marcará"]
+    final_df = df[cols]
+    
+    # 5. Renderizar tabla con estilos
+    styler = final_df.style.set_properties(**{'text-align': 'center'}) \
+                           .set_table_styles([
+                               {'selector': 'th', 'props': [('text-align', 'center')]},
+                               {'selector': 'td', 'props': [('text-align', 'center')]}
+                           ])
+    
+    column_config = {
+        "Primer Gol": st.column_config.NumberColumn(format="%.2f"),
+        "Marcará": st.column_config.NumberColumn(format="%.2f")
+    }
+
+    st.dataframe(
+        styler, 
+        hide_index=True, 
+        use_container_width=True,
+        column_config=column_config
+    )
+    st.markdown("")
+
+
+def _render_player_cards_markets(markets: list):
+    """Renderiza mercados de tarjetas de jugadores en tabla."""
+    # Separar mercados de lista de jugadores (Recibirá tarjeta...) de otros (Más tarjetas)
+    player_list_markets = []
+    other_markets = []
+    
+    for m in markets:
+        outcomes = m.get("outcomes", [])
+        # Heurística: Si tiene muchos outcomes (>4) y NO tienen líneas, probablemente es lista de jugadores.
+        # O si el label contiene "recibirá"
+        lbl = m.get("label", "").lower()
+        if "recibirá" in lbl or len(outcomes) > 6:
+            player_list_markets.append(m)
+        else:
+            other_markets.append(m)
+            
+    # 1. Renderizar Listas de Jugadores (Tablas Individuales por ahora, o consolidadas si labels coinciden)
+    # Rushbet las muestra separadas: "Recibirá una tarjeta" (Tabla), "Recibirá tarjeta roja" (Tabla)
+    
+    for m in player_list_markets:
+        label = m.get("label")
+        outcomes = m.get("outcomes", [])
+        
+        st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+        
+        # Crear tabla simple: Jugador | Cuota
+        # Asumiendo que outcome.label es el nombre del jugador y no hay líneas complejas
+        data = []
+        for out in outcomes:
+            data.append({
+                "Jugador": out.get("label"),
+                "Sí": out.get("odds")
+            })
+            
+        if data:
+            df = pd.DataFrame(data)
+            # Ordenar por cuota ascendente (más probable primero)
+            df = df.sort_values(by="Sí")
+            
+            styler = df.style.set_properties(**{'text-align': 'center'}) \
+                             .set_table_styles([
+                                 {'selector': 'th', 'props': [('text-align', 'center')]},
+                                 {'selector': 'td', 'props': [('text-align', 'center')]}
+                             ])
+            
+            st.dataframe(
+                styler,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Sí": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+            st.markdown("")
+
+    # 2. Renderizar Otros (Cards estándar)
+    if other_markets:
+        st.markdown("---")
+        for m in other_markets:
+            _render_as_card(m.get("label"), m.get("outcomes", []), {})
 
 
 def _render_debug_logs(markets):
@@ -447,11 +590,13 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
 
 def _render_as_list(label: str, outcomes: list, label_map: dict):
     """Renderiza mercado como tabla con todas las líneas."""
-    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+    # NO imprimir label aquí globalmente, hacerlo en cada bloque para evitar duplicados en fallback
     
     has_lines = any(out.get("line") for out in outcomes)
     
     if has_lines:
+        st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+        
         # Agrupar por línea
         lines_data = {}
         processed_keys = set()
@@ -467,22 +612,28 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
                 continue
             processed_keys.add(unique_key)
             
-            # Normalizar línea (Kambi suele enviar 2500 para 2.5)
+            # Normalizar línea
             display_line = raw_line
             line_sort_key = 0
             
             if raw_line is not None:
                 try:
                     val = float(raw_line)
-                    # Heurística: Si es > 50, asumimos que está escalado por 1000
-                    if val >= 50: 
+                    # Heurística: Si la magnitud es >= 50, asumimos que está escalado por 1000
+                    # Handicap 3-Way usa valores como -6000 (-6), -4000 (-4)
+                    if abs(val) >= 50: 
                         val = val / 1000.0
-                        if val.is_integer():
-                            display_line = str(int(val))
-                        else:
-                            display_line = str(val)
+                    
+                    if val.is_integer():
+                        base_str = str(int(val))
                     else:
-                        display_line = str(val).rstrip("0").rstrip(".") if "." in str(val) else str(val)
+                        base_str = str(val)
+                    
+                    is_handicap_mkt = "hándicap" in label.lower() or "handicap" in label.lower() or "asiático" in label.lower()
+                    if is_handicap_mkt and val > 0:
+                        display_line = f"+{base_str}"
+                    else:
+                        display_line = base_str
                     
                     line_sort_key = val
                 except:
@@ -491,8 +642,13 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             else:
                 display_line = ""
 
+            # Determinar nombre columna principal
+            col_name_first = "Valor"
+            if "3-way" in label.lower():
+                col_name_first = "Comienza en"
+
             if line_sort_key not in lines_data:
-                lines_data[line_sort_key] = {"Valor": display_line}
+                lines_data[line_sort_key] = {col_name_first: display_line}
             
             display_label = label_map.get(out_label, out_label)
             # Guardar el valor raw, el formateo será visual en dataframe
@@ -504,12 +660,15 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
         if rows:
             df = pd.DataFrame(rows)
             
-            cols = ["Valor"] + [c for c in df.columns if c != "Valor"]
+            # Obtener nombre dinámico de primera columna
+            first_col = [c for c in df.columns if c in ["Valor", "Comienza en"]][0]
+            
+            cols = [first_col] + [c for c in df.columns if c != first_col]
             
             # Prioridades de columnas
-            priority_cols = ["Más de", "Menos de", "Si", "No"]
-            sorted_cols = ["Valor"]
-            remaining = [c for c in cols if c != "Valor"]
+            priority_cols = ["Más de", "Menos de", "Si", "No", "Empate"] # Empate importante en 3-way
+            sorted_cols = [first_col]
+            remaining = [c for c in cols if c != first_col]
             
             for p in priority_cols:
                 if p in remaining:
@@ -522,14 +681,21 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             # Configurar columnas para 2 decimales
             column_config = {}
             for col in sorted_cols:
-                if col != "Valor":
+                if col != first_col:
                     column_config[col] = st.column_config.NumberColumn(
                         label=col,
                         format="%.2f"
                     )
             
+            # Aplicar estilos para centrar
+            styler = df.style.set_properties(**{'text-align': 'center'}) \
+                             .set_table_styles([
+                                 {'selector': 'th', 'props': [('text-align', 'center')]},
+                                 {'selector': 'td', 'props': [('text-align', 'center')]}
+                             ])
+
             st.dataframe(
-                df, 
+                styler, 
                 hide_index=True, 
                 use_container_width=True,
                 column_config=column_config
@@ -543,18 +709,59 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             
         final_outcomes = list(unique_outcomes.values())
         
-        # Si es Resultado Correcto, intentar tabla con formato
-        if "resultado correct" in label.lower() or "marcador" in label.lower():
+        label_lower = label.lower()
+        is_result_correct = "resultado correct" in label_lower or "marcador" in label_lower
+        is_half_time_full_time = "descanso" in label_lower or "medio tiempo" in label_lower
+        
+        # Si es Resultado Correcto O Descanso/Tiempo reglamentario -> TABLA
+        if is_result_correct or is_half_time_full_time:
+             st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+             
+             # Ordenamiento específico
+             if is_result_correct:
+                 # Función para ordenar: 1-0 -> (1, 0)
+                 def get_score_sort_key(outcome):
+                     lbl = outcome.get("label", "")
+                     try:
+                         # Buscar patrón N-M
+                         if "-" in lbl:
+                             parts = lbl.split("-")
+                             p1 = part_to_int(parts[0])
+                             p2 = part_to_int(parts[1])
+                             return (p1, p2)
+                         return (999, 999) # Otros al final
+                     except:
+                         return (999, 999)
+                
+                 def part_to_int(p):
+                     return int(''.join(filter(str.isdigit, p)))
+
+                 # Ordenar outcomes
+                 final_outcomes.sort(key=get_score_sort_key)
+
              data = []
+             col_name_res = "Resultado"
+             # Ajustar nombre columna para D/T
+             if is_half_time_full_time:
+                 col_name_res = "Descanso / Final"
+             
              for out in final_outcomes:
                  data.append({
-                     "Resultado": out.get("label"),
+                     col_name_res: out.get("label"),
                      "Cuota": out.get("odds")
                  })
              
              df_rc = pd.DataFrame(data)
+             
+             # Estilos
+             styler_rc = df_rc.style.set_properties(**{'text-align': 'center'}) \
+                                    .set_table_styles([
+                                        {'selector': 'th', 'props': [('text-align', 'center')]},
+                                        {'selector': 'td', 'props': [('text-align', 'center')]}
+                                    ])
+
              st.dataframe(
-                 df_rc, 
+                 styler_rc, 
                  hide_index=True, 
                  use_container_width=True,
                  column_config={
@@ -562,7 +769,7 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
                  }
              )
         else:
-             # Fallback a cards
+             # Fallback a cards (ya imprime su propio label)
              _render_as_card(label, final_outcomes, label_map)
     
     st.markdown("")
