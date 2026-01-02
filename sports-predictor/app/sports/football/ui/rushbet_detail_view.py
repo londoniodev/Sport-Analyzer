@@ -16,10 +16,13 @@ LIST = "list"
 # ==========================================
 # CONFIGURACIÓN DE PESTAÑAS (Estática)
 # ==========================================
+# ==========================================
+# CONFIGURACIÓN DE PESTAÑAS
+# ==========================================
 TABS_CONFIG = {
-    "Partido": ["tiempo_reglamentario", "medio_tiempo", "corners", "tarjetas_equipo", "disparos_equipo", "eventos_partido"],
-    "Jugadores": ["disparos_jugador", "goleador", "tarjetas_jugador", "apuestas_especiales_jugador", "asistencias_jugador", "goles_jugador", "paradas_portero"],
-    "Handicap": ["handicap_3way", "lineas_asiaticas"]
+    "PARTIDO": ["tiempo_reglamentario", "medio_tiempo", "corners", "tarjetas_equipo", "disparos_equipo", "eventos_partido"],
+    "JUGADORES": ["disparos_jugador", "goleador", "tarjetas_jugador", "apuestas_especiales_jugador", "asistencias_jugador", "goles_jugador", "paradas_portero"],
+    "HANDICAP": ["handicap_3way", "lineas_asiaticas"]
 }
 
 NOMBRES_CATEGORIAS = {
@@ -309,7 +312,10 @@ def show_match_detail_view():
     
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
-    markets = details.get("markets", {})
+    markets_raw = details.get("markets", {})
+    
+    # --- PROCESAMIENTO Y LIMPIEZA DE MERCADOS ---
+    markets = _redistribute_markets(markets_raw)
     
     # Encabezado
     _render_match_header(details, event_basic)
@@ -317,48 +323,141 @@ def show_match_detail_view():
     # GENERAR ORDEN DINÁMICO
     ORDEN_POR_CATEGORIA = get_dynamic_order(home_team, away_team)
     
-    # Pestañas
-    tabs_with_data = []
-    for tab_name, categories in TABS_CONFIG.items():
-        count = sum(len(markets.get(cat, [])) for cat in categories)
-        if count > 0:
-            tabs_with_data.append((tab_name, categories, count))
+    # PESTAÑAS PRINCIPALES
+    tabs = st.tabs(["PARTIDO", "JUGADORES", "HANDICAP"])
     
-    if not tabs_with_data:
-        st.info("No hay mercados adicionales disponibles.")
-        # Logs incluso si no hay data
-        _render_debug_logs(markets)
-        return
-    
-    tab_labels = [f"{name} ({count})" for name, _, count in tabs_with_data]
-    tabs = st.tabs(tab_labels)
-    
-    for i, tab in enumerate(tabs):
-        tab_name, categories, _ = tabs_with_data[i]
+    # 1. PESTAÑA PARTIDO
+    with tabs[0]:
+        categories = TABS_CONFIG["PARTIDO"]
+        has_content = False
+        for cat_key in categories:
+            cat_markets = markets.get(cat_key, [])
+            if not cat_markets: continue
+            
+            has_content = True
+            orden = ORDEN_POR_CATEGORIA.get(cat_key)
+            if orden:
+                cat_markets = _sort_markets_by_order(cat_markets, orden)
+            
+            cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
+            with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
+                _render_category_markets(cat_markets, home_team, away_team, orden)
+                
+        if not has_content:
+            st.info("No hay mercados de partido disponibles.")
+
+    # 2. PESTAÑA JUGADORES
+    with tabs[1]:
+        # Orden específico solicitado:
+        # Disparos, Goleador, Tarjetas, Especiales, Asistencias, Goles, Paradas
+        player_cats_order = [
+            ("disparos_jugador", _render_player_shots),
+            ("goleador", _render_scorers_markets),
+            ("tarjetas_jugador", _render_player_cards_markets),
+            ("apuestas_especiales_jugador", _render_player_specials),
+            ("asistencias_jugador", _render_player_assists),
+            ("goles_jugador", _render_player_goals),
+            ("paradas_portero", _render_goalkeeper_saves)
+        ]
         
-        with tab:
-            for cat_key in categories:
-                cat_markets = markets.get(cat_key, [])
+        has_players = False
+        for key, render_func in player_cats_order:
+            mkts = markets.get(key, [])
+            if mkts:
+                has_players = True
+                render_func(mkts)
                 
-                # Ordenar según especificación
-                orden = ORDEN_POR_CATEGORIA.get(cat_key)
-                if orden:
-                    cat_markets = _sort_markets_by_order(cat_markets, orden)
-                
-                if cat_markets:
-                    cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
-                if cat_markets:
-                    cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
-                    with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
-                        if cat_key == "goleador":
-                            _render_scorers_markets(cat_markets)
-                        elif cat_key == "tarjetas_jugador":
-                            _render_player_cards_markets(cat_markets)
-                        else:
-                            _render_category_markets(cat_markets, home_team, away_team, orden)
+        if not has_players:
+            st.info("No hay mercados de jugadores disponibles.")
+
+    # 3. PESTAÑA HANDICAP
+    with tabs[2]:
+        categories = TABS_CONFIG["HANDICAP"]
+        has_handicap = False
+        for cat_key in categories:
+            cat_markets = markets.get(cat_key, [])
+            if not cat_markets: continue
+            
+            has_handicap = True
+            orden = ORDEN_POR_CATEGORIA.get(cat_key) # Usa orden general o específico si existe
+            
+            cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
+            with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=True):
+                # Usar renderizador genérico de categorías para listas de handicap
+                _render_category_markets(cat_markets, home_team, away_team, orden)
+
+        if not has_handicap:
+            st.info("No hay mercados de hándicap disponibles.")
 
     # --- DEBUG LOGS DETALLADOS ---
     _render_debug_logs(markets)
+
+
+def _redistribute_markets(markets: dict) -> dict:
+    """
+    Reorganiza mercados mal ubicados en el JSON original hacia sus categorías correctas
+    según la arquitectura de UI definida.
+    """
+    import copy
+    m = copy.deepcopy(markets)
+    
+    # 1. Mover 'Paradas del portero' desde tiempo_reglamentario o eventos
+    # 2. Buscar 'Disparos jugador' mal ubicados
+    
+    search_cats = ["tiempo_reglamentario", "eventos_partido"]
+    
+    for src in search_cats:
+        if src not in m: continue
+        
+        kept = []
+        for mkt in m[src]:
+            lbl = mkt.get("label", "").lower()
+            moved = False
+            
+            # REGLA: Paradas del portero
+            if "parada" in lbl and "portero" in lbl:
+                if "paradas_portero" not in m: m["paradas_portero"] = []
+                m["paradas_portero"].append(mkt)
+                moved = True
+                
+            # REGLA: Disparos jugador (si apareciera aquí por error)
+            elif "disparo" in lbl and "jugador" in lbl:
+                 if "disparos_jugador" not in m: m["disparos_jugador"] = []
+                 m["disparos_jugador"].append(mkt)
+                 moved = True
+                 
+            # REGLA: Gol en ambas mitades -> MANTENER en Tiempo Reglamentario (Solicitud explicita)
+            # REGLA: Victoria y ambos marcan -> MANTENER en Tiempo Reglamentario (Solicitud explicita)
+            # Aunque vengan en eventos_partido, los movemos A tiempo_reglamentario si están en eventos
+            elif src == "eventos_partido":
+                if "gol en ambas mitades" in lbl or ("victoria" in lbl and "ambos" in lbl):
+                     if "tiempo_reglamentario" not in m: m["tiempo_reglamentario"] = []
+                     m["tiempo_reglamentario"].append(mkt)
+                     moved = True
+
+            if not moved:
+                kept.append(mkt)
+        
+        m[src] = kept
+
+    # 3. Separar 'Apuestas Especiales' de 'Asistencias'
+    # En JSON, 'asistencias_jugador' a veces trae 'Marcará o dará asistencia'
+    if "asistencias_jugador" in m:
+        kept_asist = []
+        for mkt in m["asistencias_jugador"]:
+            lbl = mkt.get("label", "").lower()
+            if "marcará o dará" in lbl or "asistencia" in lbl: # A veces vienen juntos
+                 # Si es hibrido, va a especiales
+                 if "marcará o dará" in lbl:
+                     if "apuestas_especiales_jugador" not in m: m["apuestas_especiales_jugador"] = []
+                     m["apuestas_especiales_jugador"].append(mkt)
+                 else:
+                     kept_asist.append(mkt)
+            else:
+                kept_asist.append(mkt)
+        m["asistencias_jugador"] = kept_asist
+
+    return m
 
 
 def _render_scorers_markets(markets: list):
@@ -554,6 +653,169 @@ def _render_player_cards_markets(markets: list):
         if player_list_markets: st.markdown("---")
         for m in other_markets:
             _render_as_card(m.get("label"), m.get("outcomes", []), {})
+
+
+# ==========================================
+# RENDERIZADORES DE TABLAS DE JUGADORES
+# ==========================================
+
+def _render_generic_player_table(markets: list, title: str, 
+                               val_col_name: str = "Total", 
+                               is_binary: bool = False,
+                               line_format_div_1000: bool = False):
+    """
+    Renderizador genérico para tablas de jugadores.
+    
+    Args:
+        markets: Lista de mercados.
+        title: Título de la tabla.
+        val_col_name: Nombre de la columna de valor/línea.
+        is_binary: Si es True, asume mercado tipo "Sí" (solo Cuota). Si False, busca Línea y Cuota.
+        line_format_div_1000: Si True, divide la línea por 1000 (para handicaps/totales asiáticos de kambi).
+    """
+    if not markets: return
+
+    # Título
+    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{title}</p>", unsafe_allow_html=True)
+    
+    players_data = []
+    
+    for m in markets:
+        # Extraer linea del mercado si es global (a veces la linea viene en outcome, a veces en label)
+        # En kambi para jugadores, outcomes suelen tener line y odds.
+        
+        for out in m.get("outcomes", []):
+            p_name = out.get("participant") or out.get("label")
+            if not p_name: continue
+            
+            odds = out.get("odds")
+            line = out.get("line")
+            
+            row = {"Equipo": "-", "Jugador": p_name} # Equipo no siempre disponible en outcome
+            
+            # Formatear linea
+            if not is_binary:
+                if line is not None:
+                     try: 
+                         val = float(line)
+                         if line_format_div_1000: val /= 1000.0
+                         
+                         if val.is_integer(): val_str = str(int(val))
+                         else: val_str = f"{val:.1f}"
+                         
+                         row[val_col_name] = f"Más de {val_str}"
+                     except:
+                         row[val_col_name] = str(line)
+                else:
+                    row[val_col_name] = "-"
+            
+            col_cuota = "Valor de la apuesta" if not is_binary else "Sí"
+            row[col_cuota] = odds
+            
+            players_data.append(row)
+            
+    if not players_data: return
+    
+    df = pd.DataFrame(players_data)
+    
+    # Render
+    numeric_cols = ["Valor de la apuesta", "Sí"]
+    valid_numerics = [c for c in numeric_cols if c in df.columns]
+    
+    styler = _apply_table_styles(df, valid_numerics)
+    
+    col_config = {}
+    for c in valid_numerics:
+        col_config[c] = st.column_config.NumberColumn(format="%.2f")
+        
+    rows_count = len(df)
+    dynamic_height = min((rows_count + 1) * 35 + 3, 600) # Max height 600px con scroll
+    
+    st.dataframe(
+        styler,
+        hide_index=True,
+        use_container_width=True,
+        column_config=col_config,
+        height=dynamic_height
+    )
+    st.markdown("")
+
+
+def _render_player_shots(markets: list):
+    """
+    Tabla: Disparos a puerta.
+    Cols: Equipo, Jugador, Cantidad (Más de X), Valor.
+    """
+    _render_generic_player_table(markets, "Disparos a Puerta", 
+                               val_col_name="Cantidad", 
+                               is_binary=False, 
+                               line_format_div_1000=True)
+
+def _render_player_specials(markets: list):
+    """
+    Tabla: Apuestas Especiales.
+    Cols: Equipo, Jugador, Asistencia, Penal, Cabeza.
+    Nota: Como vienen en mercados separados, hay que consolidar primero.
+    """
+    data_map = {}
+    
+    for m in markets:
+        lbl = m.get("label", "").lower()
+        
+        # Determinar tipo
+        tipo = None
+        if "asistencia" in lbl: tipo = "Asistencia"
+        elif "fuera del área" in lbl or "penal" in lbl: tipo = "Fuera Área" # Penal area suele ser 'fuera del area'
+        elif "cabeza" in lbl: tipo = "Cabeza"
+        
+        if not tipo: continue
+        
+        for out in m.get("outcomes", []):
+            p_name = out.get("participant") or out.get("label")
+            if not p_name: continue
+            
+            if p_name not in data_map:
+                data_map[p_name] = {"Jugador": p_name}
+            
+            data_map[p_name][tipo] = out.get("odds")
+            
+    if not data_map: return
+    
+    st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Apuestas Especiales Jugador</p>", unsafe_allow_html=True)
+    df = pd.DataFrame(list(data_map.values()))
+    
+    # Asegurar cols
+    for c in ["Asistencia", "Fuera Área", "Cabeza"]:
+        if c not in df.columns: df[c] = None
+        
+    # Ordenar cols
+    final_cols = ["Jugador", "Asistencia", "Fuera Área", "Cabeza"]
+    df = df[[c for c in final_cols if c in df.columns]]
+    
+    numerics = ["Asistencia", "Fuera Área", "Cabeza"]
+    styler = _apply_table_styles(df, numerics)
+    
+    col_conf = {c: st.column_config.NumberColumn(format="%.2f") for c in numerics}
+    
+    st.dataframe(
+        styler,
+        hide_index=True,
+        use_container_width=True,
+        column_config=col_conf,
+        height=(len(df)+1)*35+3
+    )
+
+def _render_player_assists(markets: list):
+    _render_generic_player_table(markets, "Asistencias", is_binary=True)
+
+def _render_player_goals(markets: list):
+    _render_generic_player_table(markets, "Goles del Jugador (2+ / Hat-trick)", is_binary=True)
+
+def _render_goalkeeper_saves(markets: list):
+    _render_generic_player_table(markets, "Paradas del Portero", 
+                               val_col_name="Cantidad", 
+                               is_binary=False, 
+                               line_format_div_1000=True)
 
 
 def _render_debug_logs(markets):
