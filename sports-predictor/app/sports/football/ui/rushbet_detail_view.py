@@ -40,6 +40,56 @@ NOMBRES_CATEGORIAS = {
     "lineas_asiaticas": "Líneas Asiáticas"
 }
 
+def _apply_table_styles(df: pd.DataFrame, numeric_cols: list = None):
+    """
+    Aplica estilos estandarizados a las tablas:
+    1. Centrado de encabezados y celdas.
+    2. Formato condicional: Verde para valor más alto, Rojo para valor más bajo (por columna).
+    """
+    # Centrado CSS robusto
+    styler = df.style.set_properties(**{
+        'text-align': 'center', 
+        'vertical-align': 'middle'
+    }).set_table_styles([
+        {'selector': 'th', 'props': [('text-align', 'center !important')]},
+        {'selector': 'td', 'props': [('text-align', 'center !important')]}
+    ])
+    
+    if not numeric_cols:
+        # Detectar columnas numéricas automáticamente si no se dan
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        
+    # Función para colorear max (verde) y min (rojo)
+    def highlight_extremes(s):
+        # Si todos son iguales o vacíos, no colorear
+        if s.nunique() <= 1 or s.empty:
+            return ['' for _ in s]
+            
+        styles = []
+        s_max = s.max()
+        s_min = s.min()
+        
+        for val in s:
+            # Manejo de NaN
+            if pd.isna(val):
+                styles.append('')
+                continue
+                
+            if val == s_max:
+                styles.append('background-color: #064e3b; color: #a7f3d0; font-weight: bold;') # Verde oscuro
+            elif val == s_min:
+                styles.append('background-color: #450a0a; color: #fecaca; font-weight: bold;') # Rojo oscuro
+            else:
+                styles.append('')
+        return styles
+
+    # Aplicar a clumnas numéricas
+    for col in numeric_cols:
+        if col in df.columns:
+            styler = styler.apply(highlight_extremes, subset=[col])
+            
+    return styler
+
 def get_dynamic_order(home_team: str, away_team: str):
     """Genera el orden de mercados dinámicamente usando los nombres de equipos."""
     h = home_team.lower()
@@ -331,53 +381,54 @@ def _render_scorers_markets(markets: list):
     final_df = df[cols]
     
     # 5. Renderizar tabla con estilos
-    styler = final_df.style.set_properties(**{'text-align': 'center'}) \
-                           .set_table_styles([
-                               {'selector': 'th', 'props': [('text-align', 'center')]},
-                               {'selector': 'td', 'props': [('text-align', 'center')]}
-                           ])
+    # APLICAR ESTILOS CENTRALIZADOS
+    # 'Primer Gol' y 'Marcará' son las numéricas
+    numeric_cols = ["Primer Gol", "Marcará"]
+    styler = _apply_table_styles(final_df, numeric_cols)
     
     column_config = {
         "Primer Gol": st.column_config.NumberColumn(format="%.2f"),
         "Marcará": st.column_config.NumberColumn(format="%.2f")
     }
 
+    # Calcular altura dinámica: ~35px por fila + 38px encabezado
+    # Mínimo 150px, sin máximo (o un máximo muy alto si se prefiere)
+    # Ajustar según CSS de Streamlit actual, 35 es un estándar razonable.
+    rows_count = len(final_df)
+    dynamic_height = (rows_count + 1) * 35 + 3
+    
     st.dataframe(
         styler, 
         hide_index=True, 
         use_container_width=True,
-        column_config=column_config
+        column_config=column_config,
+        height=dynamic_height
     )
     st.markdown("")
 
 
 def _render_player_cards_markets(markets: list):
     """Renderiza mercados de tarjetas de jugadores en tabla."""
+    # ... (Misma lógica de separación) ...
     # Separar mercados de lista de jugadores (Recibirá tarjeta...) de otros (Más tarjetas)
     player_list_markets = []
     other_markets = []
     
     for m in markets:
         outcomes = m.get("outcomes", [])
-        # Heurística: Si tiene muchos outcomes (>4) y NO tienen líneas, probablemente es lista de jugadores.
-        # O si el label contiene "recibirá"
         lbl = m.get("label", "").lower()
         if "recibirá" in lbl or len(outcomes) > 6:
             player_list_markets.append(m)
         else:
             other_markets.append(m)
             
-    # 1. Renderizar Listas de Jugadores (Tablas Individuales por ahora, o consolidadas si labels coinciden)
-    # Rushbet las muestra separadas: "Recibirá una tarjeta" (Tabla), "Recibirá tarjeta roja" (Tabla)
-    
+    # 1. Renderizar Listas de Jugadores
     for m in player_list_markets:
         label = m.get("label")
         outcomes = m.get("outcomes", [])
         
         st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
         
-        # Crear tabla simple: Jugador | Cuota
-        # Asumiendo que outcome.label es el nombre del jugador y no hay líneas complejas
         data = []
         for out in outcomes:
             data.append({
@@ -387,14 +438,12 @@ def _render_player_cards_markets(markets: list):
             
         if data:
             df = pd.DataFrame(data)
-            # Ordenar por cuota ascendente (más probable primero)
             df = df.sort_values(by="Sí")
             
-            styler = df.style.set_properties(**{'text-align': 'center'}) \
-                             .set_table_styles([
-                                 {'selector': 'th', 'props': [('text-align', 'center')]},
-                                 {'selector': 'td', 'props': [('text-align', 'center')]}
-                             ])
+            styler = _apply_table_styles(df, ["Sí"])
+            
+            rows_count = len(df)
+            dynamic_height = (rows_count + 1) * 35 + 3
             
             st.dataframe(
                 styler,
@@ -402,7 +451,8 @@ def _render_player_cards_markets(markets: list):
                 use_container_width=True,
                 column_config={
                     "Sí": st.column_config.NumberColumn(format="%.2f")
-                }
+                },
+                height=dynamic_height
             )
             st.markdown("")
 
@@ -414,22 +464,9 @@ def _render_player_cards_markets(markets: list):
 
 
 def _render_debug_logs(markets):
-    with st.expander("Logs del Sistema (Debug) - DETALLE DE LABELS", expanded=False):
-        st.write("Estructura de Labels encontrados:")
-        all_markets_flat = []
-        for cat, m_list in markets.items():
-            for m in m_list:
-                all_markets_flat.append({
-                    "category": cat,
-                    "label": m.get("label"),
-                    "outcomes_count": len(m.get("outcomes", [])),
-                    "example_outcome": m.get("outcomes")[0].get("label") if m.get("outcomes") else None
-                })
-        
-        if all_markets_flat:
-            st.dataframe(pd.DataFrame(all_markets_flat), use_container_width=True)
-        else:
-            st.info("No hay datos de mercados para mostrar en logs.")
+    with st.expander("Logs del Sistema (Debug) - JSON CRUDO", expanded=False):
+        st.write("Estructura completa de mercados (JSON):")
+        st.json(markets)
 
 
 def _sort_markets_by_order(markets: list, orden: list) -> list:
@@ -454,45 +491,147 @@ def _get_market_format(label: str, orden: list) -> str:
 
 
 def _render_match_header(details: dict, event_basic: dict):
-    """Renderiza el encabezado del partido."""
+    """Renderiza el encabezado del partido con diseño mejorado."""
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
     state = details.get("state", "NOT_STARTED")
     score = details.get("score", {})
     
-    state_labels = {"NOT_STARTED": "Próximo", "STARTED": "En Vivo", "FINISHED": "Finalizado"}
+    state_display = "PRÓXIMO"
+    score_display = "VS"
+    time_display = ""
     
-    st.markdown("---")
-    cols = st.columns([2, 1, 2])
+    if state == "STARTED":
+        state_display = "EN VIVO"
+        score_display = f"{score.get('home', 0)} - {score.get('away', 0)}"
+    elif state == "FINISHED":
+        state_display = "FINALIZADO"
+        score_display = f"{score.get('home', 0)} - {score.get('away', 0)}"
+    else:
+        start_time = details.get("start_time", event_basic.get("start_time"))
+        if start_time:
+            try:
+                dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                # Ajustar a hora local aproximada o dejar en UTC si no hay info de zona
+                # Mostramos solo hora por simplicidad
+                time_display = dt.strftime('%H:%M')
+            except:
+                pass
     
-    with cols[0]:
-        st.markdown(f"<h3>{home_team}</h3>", unsafe_allow_html=True)
-        st.caption("Local")
+    # CSS personalizado para el header
+    st.markdown(f"""
+        <style>
+            .match-header-container {{
+                background-color: #0f172a;
+                border-radius: 12px;
+                padding: 24px;
+                margin-bottom: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                border: 1px solid #1e293b;
+            }}
+            .team-name {{
+                font-size: 24px;
+                font-weight: 700;
+                color: #f8fafc;
+                width: 35%;
+                text-align: center;
+            }}
+            .match-info {{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: 30%;
+            }}
+            .match-score {{
+                font-size: 48px;
+                font-weight: 800;
+                color: #ffffff;
+                line-height: 1.2;
+            }}
+            .match-time {{
+                font-size: 32px;
+                font-weight: 700;
+                color: #ffffff;
+            }}
+            .match-status {{
+                margin-top: 8px;
+                padding: 4px 12px;
+                border-radius: 99px;
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }}
+            .status-live {{
+                background-color: #22c55e;
+                color: #052e16;
+            }}
+            .status-upcoming {{
+                background-color: #334155;
+                color: #94a3b8;
+            }}
+            .status-finished {{
+                 background-color: #ef4444;
+                color: #450a0a;
+            }}
+            .team-label {{
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                color: #64748b;
+                margin-top: 4px;
+                display: block;
+            }}
+            /* Ajuste mobile */
+            @media (max-width: 640px) {{
+                .match-header-container {{
+                    flex-direction: column;
+                    text-align: center;
+                    gap: 16px;
+                }}
+                .team-name {{
+                    width: 100%;
+                }}
+            }}
+        </style>
+    """, unsafe_allow_html=True)
+
+    status_class = "status-upcoming"
+    if state == "STARTED": status_class = "status-live"
+    elif state == "FINISHED": status_class = "status-finished"
     
-    with cols[1]:
-        if state in ["STARTED", "FINISHED"]:
-            st.markdown(f"<h2 style='text-align:center;'>{score.get('home', 0)} - {score.get('away', 0)}</h2>", unsafe_allow_html=True)
+    center_content = ""
+    if state in ["STARTED", "FINISHED"]:
+        center_content = f'<div class="match-score">{score_display}</div>'
+    else:
+        if time_display:
+            center_content = f'<div class="match-time">{time_display}</div>'
         else:
-            start_time = details.get("start_time", event_basic.get("start_time"))
-            if start_time:
-                try:
-                    dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                    st.markdown(f"<h2 style='text-align:center;'>{dt.strftime('%H:%M')}</h2>", unsafe_allow_html=True)
-                except:
-                    st.markdown("<h2 style='text-align:center;'>VS</h2>", unsafe_allow_html=True)
-            else:
-                st.markdown("<h2 style='text-align:center;'>VS</h2>", unsafe_allow_html=True)
-        
-        if state == "STARTED":
-            st.markdown("<div style='text-align:center;'><span style='background:#22c55e;color:white;padding:4px 12px;border-radius:12px;font-size:12px;'>EN VIVO</span></div>", unsafe_allow_html=True)
-        else:
-            st.caption(state_labels.get(state, state))
+             center_content = f'<div class="match-score">VS</div>'
+
+    html = f"""
+        <div class="match-header-container">
+            <div class="team-name">
+                {home_team}
+                <span class="team-label">Local</span>
+            </div>
+            
+            <div class="match-info">
+                {center_content}
+                <div class="match-status {status_class}">{state_display}</div>
+            </div>
+            
+            <div class="team-name">
+                {away_team}
+                <span class="team-label">Visitante</span>
+            </div>
+        </div>
+    """
     
-    with cols[2]:
-        st.markdown(f"<h3 style='text-align:right;'>{away_team}</h3>", unsafe_allow_html=True)
-        st.caption("Visitante")
-    
-    st.markdown("---")
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
@@ -678,21 +817,20 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             
             df = df[sorted_cols]
             
-            # Configurar columnas para 2 decimales
+            # Configurar columnas para 2 decimales y preparar lista de numéricas para estilo
             column_config = {}
+            numeric_cols_for_style = []
+            
             for col in sorted_cols:
                 if col != first_col:
+                    numeric_cols_for_style.append(col)
                     column_config[col] = st.column_config.NumberColumn(
                         label=col,
                         format="%.2f"
                     )
             
-            # Aplicar estilos para centrar
-            styler = df.style.set_properties(**{'text-align': 'center'}) \
-                             .set_table_styles([
-                                 {'selector': 'th', 'props': [('text-align', 'center')]},
-                                 {'selector': 'td', 'props': [('text-align', 'center')]}
-                             ])
+            # APLICAR ESTILOS CENTRALIZADOS
+            styler = _apply_table_styles(df, numeric_cols_for_style)
 
             st.dataframe(
                 styler, 
