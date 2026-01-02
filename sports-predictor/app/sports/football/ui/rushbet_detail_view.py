@@ -707,20 +707,18 @@ def _render_match_header(details: dict, event_basic: dict):
 
     html = f"""
 <div class="match-header-container">
-    <div class="team-name">
-        {home_team}
-        <span class="team-label">Local</span>
-    </div>
-    
-    <div class="match-info">
-        {center_content}
-        <div class="match-status {status_class}">{state_display}</div>
-    </div>
-    
-    <div class="team-name">
-        {away_team}
-        <span class="team-label">Visitante</span>
-    </div>
+<div class="team-name">
+{home_team}
+<span class="team-label">Local</span>
+</div>
+<div class="match-info">
+{center_content}
+<div class="match-status {status_class}">{state_display}</div>
+</div>
+<div class="team-name">
+{away_team}
+<span class="team-label">Visitante</span>
+</div>
 </div>
 """
     
