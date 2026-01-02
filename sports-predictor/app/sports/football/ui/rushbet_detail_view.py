@@ -355,9 +355,30 @@ def _render_match_header(details: dict, event_basic: dict):
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
     """Renderiza los mercados de una categoría."""
     
-    label_map = {"1": home_team, "X": "Empate", "2": away_team}
+    label_map = {"1": home_team, "X": "Empate", "2": away_team, "Over": "Más de", "Under": "Menos de"}
     
+    # 1. AGRUPAR MERCADOS POR LABEL
+    # La API a veces devuelve múltiples objetos con el mismo label (ej. "Total de goles")
+    grouped_markets = {}
     for market in markets:
+        lbl = market.get("label", "Mercado")
+        if lbl not in grouped_markets:
+            grouped_markets[lbl] = []
+        grouped_markets[lbl].extend(market.get("outcomes", []))
+    
+    # Reconstruir lista de mercados únicos consolidados
+    consolidated_markets = []
+    for lbl, outcomes in grouped_markets.items():
+        consolidated_markets.append({"label": lbl, "outcomes": outcomes})
+
+    # 2. ORDENAR
+    if orden:
+        # Usamos la lista consolidada
+        final_markets = _sort_markets_by_order(consolidated_markets, orden)
+    else:
+        final_markets = consolidated_markets
+
+    for market in final_markets:
         label = market.get("label", "Mercado")
         outcomes = market.get("outcomes", [])
         
@@ -383,10 +404,22 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
     """Renderiza mercado como cards horizontales."""
     st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
     
-    n_cols = min(len(outcomes), 4)
+    # Si hay muchos outcomes (ej. marcadores correctos duplicados por agrupación), 
+    # mostrar solo únicos o limitar?
+    # En card view solemos querer ver todo, pero cuidado con duplicados.
+    # Deduplicar por label + line
+    unique_outcomes = {}
+    for out in outcomes:
+        key = (out.get("label"), out.get("line"))
+        unique_outcomes[key] = out
+    
+    sorted_outcomes = list(unique_outcomes.values())
+    
+    n_cols = min(len(sorted_outcomes), 4)
+    if n_cols == 0: n_cols = 1
     cols = st.columns(n_cols)
     
-    for i, outcome in enumerate(outcomes):
+    for i, outcome in enumerate(sorted_outcomes):
         with cols[i % n_cols]:
             odds = outcome.get("odds", 0)
             out_label = outcome.get("label", "")
@@ -399,7 +432,7 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
             # Negrita para equipos/empate en resultado final
             if out_label in ["1", "X", "2"] and "resultado final" in label.lower():
                 display_label = f"<b>{display_label}</b>"
-            elif out_label in label_map.values(): # Si es nombre de equipo literal
+            elif out_label in label_map.values(): 
                  display_label = f"<b>{display_label}</b>"
 
             st.markdown(f"""
@@ -421,52 +454,83 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
     if has_lines:
         # Agrupar por línea
         lines_data = {}
+        processed_keys = set()
+        
         for out in outcomes:
             line = out.get("line")
+            odds = out.get("odds", 0)
+            out_label = out.get("label", "")
+            
+            # Crear key única para evitar duplicados exactos
+            unique_key = (line, out_label, odds)
+            if unique_key in processed_keys:
+                continue
+            processed_keys.add(unique_key)
+
             if line is None:
                 line = ""
             
             try:
                 line_key = float(line) if line else 0
             except:
-                line_key = 0
-            
+                line_key = 0 # Fallback para str lines
+                
             if line_key not in lines_data:
-                lines_data[line_key] = {"Línea": line}
+                lines_data[line_key] = {"Valor": line} # Cambiado 'Línea' por 'Valor'
             
-            out_label = out.get("label", "")
             display_label = label_map.get(out_label, out_label)
-            lines_data[line_key][display_label] = out.get("odds", 0)
+            lines_data[line_key][display_label] = odds
         
-        # Crear DataFrame con TODAS las líneas
+        # Crear DataFrame
         rows = [lines_data[k] for k in sorted(lines_data.keys())]
         
         if rows:
             df = pd.DataFrame(rows)
-            # Ordenar columnas si es posible
-            # ...
+            
+            # Reordenar columnas: Valor | Más de | Menos de ...
+            cols = ["Valor"] + [c for c in df.columns if c != "Valor"]
+            
+            # Si existen 'Más de' y 'Menos de', ponerlos en orden
+            priority_cols = ["Más de", "Menos de", "Si", "No"]
+            sorted_cols = ["Valor"]
+            remaining = [c for c in cols if c != "Valor"]
+            
+            for p in priority_cols:
+                if p in remaining:
+                    sorted_cols.append(p)
+                    remaining.remove(p)
+            sorted_cols.extend(remaining)
+            
+            df = df[sorted_cols]
+            
+            # Formatear valores numéricos
             st.dataframe(df, hide_index=True, use_container_width=True)
     else:
-        # Sin líneas - grid de cards pero forzado a lista (aunque visualmente cards en grid es mejor para pocos items)
-        # El usuario pidió "lista" para algunos mercados sin línea (ej Total de goles si no tuviera linea, o Resultado Correcto)
+        # Sin líneas - usar formato de grid pero validando duplicados
+        # ... (similar a _render_as_card simplificado) ...
+        # Para resultado correcto, lista mejor?
+        # El usuario pidió "lista" para Resultado Correcto.
+        # Si orden dice LIST y no tiene lines, quizás df simple?
         
-        # Si es Resultado Correcto, es mejor tabla?
-        # Rushbet lo muestra como grid denso.
-        # Por ahora mantengo el grid de cards que funciona bien.
-        n_cols = min(len(outcomes), 4)
-        cols = st.columns(n_cols)
+        unique_outcomes = {}
+        for out in outcomes:
+            key = (out.get("label"), out.get("odds"))
+            unique_outcomes[key] = out
+            
+        final_outcomes = list(unique_outcomes.values())
         
-        for i, out in enumerate(outcomes):
-            with cols[i % n_cols]:
-                odds = out.get("odds", 0)
-                out_label = out.get("label", "")
-                display_label = label_map.get(out_label, out_label)
-                
-                st.markdown(f"""
-                <div style="background:#1e3a5f;border:1px solid #2d5a87;border-radius:6px;padding:8px;text-align:center;margin:2px;">
-                    <div style="color:#94a3b8;font-size:10px;">{display_label}</div>
-                    <div style="color:#22c55e;font-size:16px;font-weight:bold;">{odds:.2f}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # Si es Resultado Correcto, intentar tabla
+        if "resultado correcto" in label.lower() or "marcador" in label.lower():
+             # Crear tabla: Resultado | Cuota
+             data = []
+             for out in final_outcomes:
+                 data.append({
+                     "Resultado": out.get("label"),
+                     "Cuota": out.get("odds")
+                 })
+             st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+        else:
+             # Fallback a cards
+             _render_as_card(label, final_outcomes, label_map)
     
     st.markdown("")
