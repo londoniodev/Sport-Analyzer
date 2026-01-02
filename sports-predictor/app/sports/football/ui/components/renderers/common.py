@@ -3,7 +3,7 @@ import pandas as pd
 from ..styles import _apply_table_styles, get_card_html, get_section_title_html, render_styled_table
 from ..market_logic import _sort_markets_by_order, _get_market_format
 
-def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None):
+def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None, analysis_data: dict = None):
     """Renderiza los mercados de una categoría."""
     
     label_map = {"1": home_team, "X": "Empate", "2": away_team, "Over": "Más de", "Under": "Menos de"}
@@ -44,7 +44,7 @@ def _render_category_markets(markets: list, home_team: str, away_team: str, orde
             is_list = has_lines or len(outcomes) > 4
         
         if is_list:
-            _render_as_list(label, outcomes, label_map)
+            _render_as_list(label, outcomes, label_map, analysis_data)
         else:
             _render_as_card(label, outcomes, label_map)
 
@@ -85,7 +85,7 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
     st.markdown("")
 
 
-def _render_as_list(label: str, outcomes: list, label_map: dict):
+def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: dict = None):
     """Renderiza mercado como tabla con todas las líneas."""
     has_lines = any(out.get("line") for out in outcomes)
     
@@ -94,6 +94,10 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
         
         lines_data = {}
         processed_keys = set()
+        
+        # Datos de Poisson Over/Under si están disponibles
+        poisson_ou = analysis_data.get("over_under", {}) if analysis_data else {}
+        is_total_goals = "total de goles" in label.lower() and "equipo" not in label.lower()
         
         for out in outcomes:
             raw_line = out.get("line")
@@ -111,6 +115,7 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             if raw_line is not None:
                 try:
                     val = float(raw_line)
+                    # Normalización de líneas tipo "2500" -> "2.5"
                     if abs(val) >= 50: 
                         val = val / 1000.0
                     
@@ -141,18 +146,25 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             
             display_label = label_map.get(out_label, out_label)
             lines_data[line_sort_key][display_label] = odds
-        
+            
+            # --- INYECCIÓN DE PROBABILIDAD (POISSON) ---
+            if is_total_goals and str(line_sort_key) in poisson_ou:
+                p_data = poisson_ou[str(line_sort_key)]
+                prob_val = p_data["over"] if out_label == "Over" else p_data["under"]
+                prob_col_name = f"Prob. % ({display_label})"
+                lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+
         rows = [lines_data[k] for k in sorted(lines_data.keys())]
         
         if rows:
             df = pd.DataFrame(rows)
             
             first_col = [c for c in df.columns if c in ["Valor", "Comienza en"]][0]
-            cols = [first_col] + [c for c in df.columns if c != first_col]
             
-            priority_cols = ["Más de", "Menos de", "Si", "No", "Empate"]
+            # Ordenar columnas inteligentemente
+            priority_cols = ["Más de", "Prob. % (Más de)", "Menos de", "Prob. % (Menos de)", "Si", "No", "Empate"]
             sorted_cols = [first_col]
-            remaining = [c for c in cols if c != first_col]
+            remaining = [c for c in df.columns if c != first_col]
             
             for p in priority_cols:
                 if p in remaining:
@@ -168,11 +180,16 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             for col in sorted_cols:
                 if col != first_col:
                     numeric_cols_for_style.append(col)
-                    column_config[col] = st.column_config.NumberColumn(
-                        label=col,
-                        format="%.2f"
-                    )
-            
+                    if "Prob. %" in col:
+                        column_config[col] = st.column_config.NumberColumn(
+                            label=col,
+                            format="%.1f%%"
+                        )
+                    else:
+                        column_config[col] = st.column_config.NumberColumn(
+                            label=col,
+                            format="%.2f"
+                        )
             
             styler = _apply_table_styles(df, numeric_cols_for_style)
 

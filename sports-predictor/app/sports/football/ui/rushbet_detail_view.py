@@ -31,6 +31,7 @@ from .components.renderers.players import (
     _render_goalkeeper_saves
 )
 from .components.styles import _apply_table_styles
+from app.sports.football.etl import FootballETL
 
 
 def _render_debug_logs(markets):
@@ -52,17 +53,16 @@ def show_match_detail_view():
     event_id = st.session_state.selected_event_id
     event_basic = st.session_state.get("selected_event_data", {})
     
-    if st.button("Volver", icon=":material/arrow_back:"):
-        st.session_state.rushbet_view = "list"
-        st.session_state.selected_event_id = None
-        st.rerun()
-    
     client = RushbetClient()
     with st.spinner("Cargando mercados..."):
         details = client.get_event_details(event_id)
     
     if not details:
         st.error("No se pudieron cargar los detalles.")
+        # Botón de volver por si falla
+        if st.button("Volver", icon=":material/arrow_back:"):
+            st.session_state.rushbet_view = "list"
+            st.rerun()
         return
     
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
@@ -71,6 +71,56 @@ def show_match_detail_view():
     away_id = details.get("away_id")
     markets_raw = details.get("markets", {})
     
+    # --- FILA DE BOTONES DE ACCIÓN ---
+    col_v, col_d, col_a = st.columns([1, 2, 2])
+    with col_v:
+        if st.button("Volver", icon=":material/arrow_back:"):
+            st.session_state.rushbet_view = "list"
+            st.session_state.selected_event_id = None
+            st.rerun()
+            
+    with col_d:
+        if home_id and away_id:
+            if st.button("📥 Descargar Historial (Ult. 20)", help=f"Sincroniza los últimos 20 partidos de {home_team} y {away_team} desde API-Football"):
+                with st.status("Sincronizando historial de equipos...", expanded=True) as status:
+                    etl = FootballETL()
+                    
+                    st.write(f"⏳ Sincronizando **{home_team}**...")
+                    h_count = etl.sync_team_history(home_id, 20)
+                    st.write(f"✅ {h_count} partidos procesados.")
+                    
+                    st.write(f"⏳ Sincronizando **{away_team}**...")
+                    a_count = etl.sync_team_history(away_id, 20)
+                    st.write(f"✅ {a_count} partidos procesados.")
+                    
+                    status.update(label="¡Historial Sincronizado!", state="complete", expanded=False)
+                st.success(f"Sincronización finalizada: {h_count + a_count} partidos totales en base de datos.")
+
+    with col_a:
+        do_analysis = st.toggle("📈 Mostrar Análisis Dinámico", 
+                                help="Calcula probabilidades en tiempo real usando el modelo Poisson Ajustado (Dixon-Coles + EWMA). Requiere haber descargado el historial.")
+
+    # --- CÁLCULO DE PREDICCIONES (Si aplica) ---
+    predictions = None
+    if do_analysis and home_id and away_id:
+        from app.sports.football.analytics import get_full_match_prediction
+        from app.core.database import get_session
+        
+        with next(get_session()) as session:
+            # Verificar si hay datos
+            check_stmt = (
+                select(Fixture)
+                .where((Fixture.home_team_id == home_id) | (Fixture.away_team_id == home_id))
+                .limit(5)
+            )
+            has_data = session.exec(check_stmt).first()
+            
+            if has_data:
+                predictions = get_full_match_prediction(home_id, away_id, session)
+            else:
+                st.sidebar.warning("⚠️ No hay datos históricos para este equipo. Usa el botón 'Descargar Historial' para habilitar el análisis.")
+                do_analysis = False
+
     # --- PROCESAMIENTO Y LIMPIEZA DE MERCADOS ---
     markets = _redistribute_markets(markets_raw)
     
@@ -97,8 +147,15 @@ def show_match_detail_view():
                 cat_markets = _sort_markets_by_order(cat_markets, orden)
             
             cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
-            with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=(cat_key == "tiempo_reglamentario")):
-                _render_category_markets(cat_markets, home_team, away_team, orden)
+            expanded = (cat_key == "tiempo_reglamentario")
+            with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=expanded):
+                _render_category_markets(
+                    cat_markets, 
+                    home_team, 
+                    away_team, 
+                    orden,
+                    analysis_data=predictions if do_analysis else None
+                )
                 
         if not has_content:
             st.info("No hay mercados de partido disponibles.")
@@ -127,7 +184,14 @@ def show_match_detail_view():
                 m_list = markets[market_key]
                 title = NOMBRES_CATEGORIAS.get(market_key, market_key)
                 with st.expander(f"{title} ({len(m_list)})", expanded=False):
-                    renderer_func(m_list, home_team, away_team, home_id, away_id)
+                    renderer_func(
+                        m_list, 
+                        home_team, 
+                        away_team, 
+                        home_id, 
+                        away_id,
+                        do_analysis=do_analysis
+                    )
                 has_players = True
                 
         if not has_players:
@@ -147,7 +211,13 @@ def show_match_detail_view():
             cat_name = NOMBRES_CATEGORIAS.get(cat_key, cat_key)
             with st.expander(f"{cat_name} ({len(cat_markets)})", expanded=True):
                 # Usar renderizador genérico de categorías para listas de handicap
-                _render_category_markets(cat_markets, home_team, away_team, orden)
+                _render_category_markets(
+                    cat_markets, 
+                    home_team, 
+                    away_team, 
+                    orden,
+                    analysis_data=predictions if do_analysis else None
+                )
 
         if not has_handicap:
             st.info("No hay mercados de hándicap disponibles.")

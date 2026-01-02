@@ -120,3 +120,200 @@ def get_team_cards_avg(team_id: int, last_n_games: int, session: Session) -> dic
         "yellow": total_yellow / len(results),
         "red": total_red / len(results)
     }
+
+
+def calculate_dynamic_weighted_avg(values: list, alpha: float = 0.1) -> float:
+    """
+    Calcula una media ponderada exponencialmente (EWMA).
+    El valor en el índice 0 (más reciente) tiene peso 1.0.
+    Cada valor posterior i tiene peso (1-alpha)^i.
+    """
+    if not values:
+        return 0.0
+    
+    total_weighted_sum = 0.0
+    total_weights = 0.0
+    
+    for i, val in enumerate(values):
+        weight = (1 - alpha) ** i
+        total_weighted_sum += val * weight
+        total_weights += weight
+        
+    return total_weighted_sum / total_weights if total_weights > 0 else 0.0
+
+
+# =============================================================================
+# NUEVAS FUNCIONES PARA PREDICCIONES
+# =============================================================================
+
+def get_team_goals_avg(team_id: int, last_n_games: int, session: Session, use_weighted: bool = False, alpha: float = 0.1) -> float:
+    """
+    Calcula el promedio de goles anotados por el equipo en los últimos N partidos.
+    Si use_weighted=True, usa Media Ponderada Exponencial (EWMA).
+    """
+    fixtures = (
+        select(Fixture)
+        .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+        .where(Fixture.home_score != None)  # Solo partidos jugados
+        .order_by(Fixture.date.desc())
+        .limit(last_n_games)
+    )
+    results = session.exec(fixtures).all()
+    
+    if not results:
+        return 0.0
+    
+    goals_list = []
+    for f in results:
+        if f.home_team_id == team_id:
+            goals_list.append(f.home_score or 0)
+        else:
+            goals_list.append(f.away_score or 0)
+    
+    if use_weighted:
+        return calculate_dynamic_weighted_avg(goals_list, alpha)
+    
+    return sum(goals_list) / len(goals_list)
+
+
+def get_team_goals_conceded_avg(team_id: int, last_n_games: int, session: Session, use_weighted: bool = False, alpha: float = 0.1) -> float:
+    """
+    Calcula el promedio de goles recibidos por el equipo en los últimos N partidos.
+    Si use_weighted=True, usa Media Ponderada Exponencial (EWMA).
+    """
+    fixtures = (
+        select(Fixture)
+        .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+        .where(Fixture.home_score != None)
+        .order_by(Fixture.date.desc())
+        .limit(last_n_games)
+    )
+    results = session.exec(fixtures).all()
+    
+    if not results:
+        return 0.0
+    
+    conceded_list = []
+    for f in results:
+        if f.home_team_id == team_id:
+            conceded_list.append(f.away_score or 0)
+        else:
+            conceded_list.append(f.home_score or 0)
+    
+    if use_weighted:
+        return calculate_dynamic_weighted_avg(conceded_list, alpha)
+    
+    return sum(conceded_list) / len(conceded_list)
+
+
+def get_team_btts_pct(team_id: int, last_n_games: int, session: Session) -> float:
+    """
+    Calcula el porcentaje de partidos donde AMBOS equipos marcaron.
+    Retorna 0.0 a 1.0 (0% a 100%)
+    Útil para: Mercado BTTS (Ambos Equipos Marcarán)
+    """
+    fixtures = (
+        select(Fixture)
+        .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+        .where(Fixture.home_score != None)
+        .order_by(Fixture.date.desc())
+        .limit(last_n_games)
+    )
+    results = session.exec(fixtures).all()
+    
+    if not results:
+        return 0.0
+    
+    btts_count = sum(
+        1 for f in results 
+        if (f.home_score or 0) > 0 and (f.away_score or 0) > 0
+    )
+    
+    return btts_count / len(results)
+
+
+def get_team_clean_sheet_pct(team_id: int, last_n_games: int, session: Session) -> float:
+    """
+    Calcula el porcentaje de partidos donde el equipo NO recibió gol.
+    Retorna 0.0 a 1.0 (0% a 100%)
+    Útil para: Victoria sin recibir gol, Clean Sheet
+    """
+    fixtures = (
+        select(Fixture)
+        .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+        .where(Fixture.home_score != None)
+        .order_by(Fixture.date.desc())
+        .limit(last_n_games)
+    )
+    results = session.exec(fixtures).all()
+    
+    if not results:
+        return 0.0
+    
+    clean_sheet_count = 0
+    for f in results:
+        if f.home_team_id == team_id:
+            if (f.away_score or 0) == 0:
+                clean_sheet_count += 1
+        else:
+            if (f.home_score or 0) == 0:
+                clean_sheet_count += 1
+    
+    return clean_sheet_count / len(results)
+
+
+def get_team_fouls_avg(team_id: int, last_n_games: int, session: Session) -> float:
+    """
+    Calcula el promedio de faltas cometidas por el equipo.
+    Útil para: Mercado de Faltas
+    """
+    statement = (
+        select(TeamMatchStats)
+        .where(TeamMatchStats.team_id == team_id)
+        .order_by(TeamMatchStats.fixture_id.desc())
+        .limit(last_n_games)
+    )
+    results = session.exec(statement).all()
+    
+    if not results:
+        return 0.0
+    
+    total_fouls = sum(r.fouls or 0 for r in results)
+    return total_fouls / len(results)
+
+
+def get_team_over_under_pct(team_id: int, last_n_games: int, threshold: float, session: Session) -> dict:
+    """
+    Calcula el porcentaje de partidos Over/Under X goles totales.
+    
+    Args:
+        threshold: Línea de goles (ej: 2.5, 1.5, 3.5)
+        
+    Returns:
+        {"over_pct": float, "under_pct": float}
+    
+    Útil para: Mercado Over/Under
+    """
+    fixtures = (
+        select(Fixture)
+        .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+        .where(Fixture.home_score != None)
+        .order_by(Fixture.date.desc())
+        .limit(last_n_games)
+    )
+    results = session.exec(fixtures).all()
+    
+    if not results:
+        return {"over_pct": 0.0, "under_pct": 0.0}
+    
+    over_count = sum(
+        1 for f in results 
+        if ((f.home_score or 0) + (f.away_score or 0)) > threshold
+    )
+    
+    over_pct = over_count / len(results)
+    return {
+        "over_pct": over_pct,
+        "under_pct": 1.0 - over_pct
+    }
+

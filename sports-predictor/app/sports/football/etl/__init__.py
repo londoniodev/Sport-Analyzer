@@ -144,6 +144,34 @@ class FootballETL(ISportETL):
         
         logger.info(f"[INJURIES] Sincronizadas {len(injuries_data)} lesiones")
         return len(injuries_data)
+
+    def sync_team_history(self, team_id: int, last_n: int = 20) -> int:
+        """
+        Sincroniza los últimos N partidos jugados por un equipo, 
+        incluyendo todos los detalles (stats, lineups, player stats).
+        """
+        logger.info(f"[TEAM-SYNC] Sincronizando historial del equipo {team_id}, últimos {last_n} partidos")
+        
+        # 1. Obtener lista de fixtures desde la API
+        fixtures_data = self.api_client.get_team_fixtures(team_id, last_n)
+        if not fixtures_data:
+            logger.warning(f"[TEAM-SYNC] No se encontraron partidos para el equipo {team_id}")
+            return 0
+        
+        # 2. Procesar y guardar los fixtures básicos
+        fixture_ids = []
+        with self._get_db_session() as session:
+            for fixture_data in fixtures_data:
+                fixture = self._process_fixture(fixture_data, session)
+                if fixture:
+                    fixture_ids.append(fixture.id)
+        
+        # 3. Sincronizar detalles para cada fixture (esta parte hace varias llamadas a la API)
+        if fixture_ids:
+            logger.info(f"[TEAM-SYNC] Descargando detalles para {len(fixture_ids)} partidos")
+            self._sync_fixture_details_batch(fixture_ids)
+            
+        return len(fixture_ids)
     
     def sync_event_details(self, event_id: int) -> None:
         """

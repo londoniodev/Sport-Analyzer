@@ -196,3 +196,45 @@ class FootballAPIClient(ISportAPIClient):
         logger.info(f"Successfully fetched player stats for {len(data)} teams in fixture {fixture_id}")
         return data
 
+    def get_team_fixtures(self, team_id: int, last_n: int = 20) -> List[Dict[str, Any]]:
+        """
+        Fetch last N played fixtures for a specific team.
+        Only returns finished matches (status = 'FT').
+        
+        Args:
+            team_id: ID del equipo
+            last_n: Número de últimos partidos a obtener
+            
+        Returns:
+            Lista de fixtures ordenados del más reciente al más antiguo
+        """
+        logger.info(f"[API-GET] Team Fixtures: team={team_id}, last={last_n}")
+        url = f"{BASE_URL}/fixtures"
+        params = {
+            'team': team_id,
+            'last': last_n,
+            'status': 'FT'  # Solo partidos finalizados
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            logger.info(f"[API-RESPONSE] Status: {response.status_code}")
+            
+            if response.status_code == 401:
+                logger.error("API Key is invalid or expired!")
+                return []
+            
+            response.raise_for_status()
+            json_data = response.json()
+            
+            if json_data.get('errors'):
+                logger.error(f"[API-ERROR] {json_data.get('errors')}")
+                return []
+            
+            data = json_data.get('response', [])
+            logger.info(f"[API-SUCCESS] Fetched {len(data)} fixtures for team {team_id}")
+            return data
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"[API-EXCEPTION] {type(e).__name__}: {e}")
+            return []
