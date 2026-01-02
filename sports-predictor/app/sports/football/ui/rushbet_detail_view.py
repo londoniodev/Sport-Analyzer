@@ -457,29 +457,46 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
         processed_keys = set()
         
         for out in outcomes:
-            line = out.get("line")
+            raw_line = out.get("line")
             odds = out.get("odds", 0)
             out_label = out.get("label", "")
             
             # Crear key única para evitar duplicados exactos
-            unique_key = (line, out_label, odds)
+            unique_key = (raw_line, out_label, odds)
             if unique_key in processed_keys:
                 continue
             processed_keys.add(unique_key)
-
-            if line is None:
-                line = ""
             
-            try:
-                line_key = float(line) if line else 0
-            except:
-                line_key = 0 # Fallback para str lines
-                
-            if line_key not in lines_data:
-                lines_data[line_key] = {"Valor": line} # Cambiado 'Línea' por 'Valor'
+            # Normalizar línea (Kambi suele enviar 2500 para 2.5)
+            display_line = raw_line
+            line_sort_key = 0
+            
+            if raw_line is not None:
+                try:
+                    val = float(raw_line)
+                    # Heurística: Si es > 50, asumimos que está escalado por 1000
+                    if val >= 50: 
+                        val = val / 1000.0
+                        if val.is_integer():
+                            display_line = str(int(val))
+                        else:
+                            display_line = str(val)
+                    else:
+                        display_line = str(val).rstrip("0").rstrip(".") if "." in str(val) else str(val)
+                    
+                    line_sort_key = val
+                except:
+                    display_line = str(raw_line)
+                    line_sort_key = 0
+            else:
+                display_line = ""
+
+            if line_sort_key not in lines_data:
+                lines_data[line_sort_key] = {"Valor": display_line}
             
             display_label = label_map.get(out_label, out_label)
-            lines_data[line_key][display_label] = odds
+            # Guardar el valor raw, el formateo será visual en dataframe
+            lines_data[line_sort_key][display_label] = odds
         
         # Crear DataFrame
         rows = [lines_data[k] for k in sorted(lines_data.keys())]
@@ -487,10 +504,9 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
         if rows:
             df = pd.DataFrame(rows)
             
-            # Reordenar columnas: Valor | Más de | Menos de ...
             cols = ["Valor"] + [c for c in df.columns if c != "Valor"]
             
-            # Si existen 'Más de' y 'Menos de', ponerlos en orden
+            # Prioridades de columnas
             priority_cols = ["Más de", "Menos de", "Si", "No"]
             sorted_cols = ["Valor"]
             remaining = [c for c in cols if c != "Valor"]
@@ -503,15 +519,23 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             
             df = df[sorted_cols]
             
-            # Formatear valores numéricos
-            st.dataframe(df, hide_index=True, use_container_width=True)
+            # Configurar columnas para 2 decimales
+            column_config = {}
+            for col in sorted_cols:
+                if col != "Valor":
+                    column_config[col] = st.column_config.NumberColumn(
+                        label=col,
+                        format="%.2f"
+                    )
+            
+            st.dataframe(
+                df, 
+                hide_index=True, 
+                use_container_width=True,
+                column_config=column_config
+            )
     else:
-        # Sin líneas - usar formato de grid pero validando duplicados
-        # ... (similar a _render_as_card simplificado) ...
-        # Para resultado correcto, lista mejor?
-        # El usuario pidió "lista" para Resultado Correcto.
-        # Si orden dice LIST y no tiene lines, quizás df simple?
-        
+        # Sin líneas
         unique_outcomes = {}
         for out in outcomes:
             key = (out.get("label"), out.get("odds"))
@@ -519,16 +543,24 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
             
         final_outcomes = list(unique_outcomes.values())
         
-        # Si es Resultado Correcto, intentar tabla
-        if "resultado correcto" in label.lower() or "marcador" in label.lower():
-             # Crear tabla: Resultado | Cuota
+        # Si es Resultado Correcto, intentar tabla con formato
+        if "resultado correct" in label.lower() or "marcador" in label.lower():
              data = []
              for out in final_outcomes:
                  data.append({
                      "Resultado": out.get("label"),
                      "Cuota": out.get("odds")
                  })
-             st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+             
+             df_rc = pd.DataFrame(data)
+             st.dataframe(
+                 df_rc, 
+                 hide_index=True, 
+                 use_container_width=True,
+                 column_config={
+                     "Cuota": st.column_config.NumberColumn(format="%.2f")
+                 }
+             )
         else:
              # Fallback a cards
              _render_as_card(label, final_outcomes, label_map)
