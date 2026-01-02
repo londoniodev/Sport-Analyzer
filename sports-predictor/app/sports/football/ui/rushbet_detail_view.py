@@ -209,12 +209,24 @@ def show_match_detail_view():
                         _render_category_markets(cat_markets, home_team, away_team, orden)
 
     # --- DEBUG LOGS (Solicitado por usuario) ---
-    with st.expander("Logs del Sistema (Debug)", expanded=False):
-        st.markdown("### Categorización de Mercados")
-        # Mostrar el conteo por categoría para verificar
-        debug_counts = {k: len(v) for k, v in markets.items() if v}
-        st.json(debug_counts)
-        st.markdown("Revisa la consola de tu aplicación para logs detallados de 'DEBUG'.")
+    with st.expander("Logs del Sistema (Debug) - LABELS CRUDOS", expanded=True):
+        st.markdown("### Categorías Crudas desde la API")
+        
+        # Recopilar todos los labels crudos organizados por su categoría actual
+        raw_labels_by_cat = {}
+        for cat, market_list in markets.items():
+            labels = [m["label"] for m in market_list]
+            if labels:
+                raw_labels_by_cat[cat] = labels
+        
+        st.write(raw_labels_by_cat)
+        
+        st.markdown("---")
+        st.markdown("### Lista Plana de Todos los Labels Encontrados")
+        all_labels = []
+        for m_list in markets.values():
+            all_labels.extend([m["label"] for m in m_list])
+        st.code("\n".join(sorted(all_labels)))
 
 
 def _sort_markets_by_order(markets: list, orden: list) -> list:
