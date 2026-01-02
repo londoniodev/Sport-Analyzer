@@ -454,57 +454,104 @@ def _render_scorers_markets(markets: list):
 
 
 def _render_player_cards_markets(markets: list):
-    """Renderiza mercados de tarjetas de jugadores en tabla."""
-    # ... (Misma lógica de separación) ...
-    # Separar mercados de lista de jugadores (Recibirá tarjeta...) de otros (Más tarjetas)
+    """Renderiza mercados de tarjetas de jugadores en tabla consolidada."""
     player_list_markets = []
     other_markets = []
     
+    # 1. Clasificar mercados
     for m in markets:
         outcomes = m.get("outcomes", [])
         lbl = m.get("label", "").lower()
-        if "recibirá" in lbl or len(outcomes) > 6:
+        # "Recibirá tarjeta" es genérico, "tarjeta roja" específico.
+        if "recibirá" in lbl:
             player_list_markets.append(m)
         else:
             other_markets.append(m)
             
-    # 1. Renderizar Listas de Jugadores
-    for m in player_list_markets:
-        label = m.get("label")
-        outcomes = m.get("outcomes", [])
+    # 2. Procesar datos de jugadores consolidado
+    if player_list_markets:
+        players_data = {}
         
-        st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>{label}</p>", unsafe_allow_html=True)
+        # Mapeo de columnas: label del mercado -> nombre columna
+        # "Recibirá una tarjeta" -> "Tarjeta"
+        # "Recibirá una tarjeta roja" -> "Roja"
         
-        data = []
-        for out in outcomes:
-            data.append({
-                "Jugador": out.get("label"),
-                "Sí": out.get("odds")
-            })
+        for m in player_list_markets:
+            raw_label = m.get("label", "")
+            lbl_lower = raw_label.lower()
             
-        if data:
-            df = pd.DataFrame(data)
-            df = df.sort_values(by="Sí")
+            col_name = "Tarjeta" # Default
+            if "roja" in lbl_lower:
+                col_name = "Roja"
+            elif "tarjeta" in lbl_lower and "roja" not in lbl_lower:
+                col_name = "Tarjeta"
+            else:
+                col_name = raw_label # Fallback
+                
+            for out in m.get("outcomes", []):
+                # Usar participant si existe (igual que en goleadores)
+                p_name = out.get("participant") or out.get("label")
+                if not p_name or p_name == "Sí": 
+                    continue
+                    
+                if p_name not in players_data:
+                    players_data[p_name] = {"Jugador": p_name}
+                
+                players_data[p_name][col_name] = out.get("odds")
+        
+        # 3. Crear DataFrame Unificado
+        data_list = list(players_data.values())
+        if data_list:
+            st.markdown(f"<p style='margin-bottom:4px;font-weight:bold;'>Tarjetas de Jugadores</p>", unsafe_allow_html=True)
+            df = pd.DataFrame(data_list)
             
-            styler = _apply_table_styles(df, ["Sí"])
+            # Asegurar columnas existen
+            if "Tarjeta" not in df.columns: df["Tarjeta"] = None
+            if "Roja" not in df.columns: df["Roja"] = None
             
-            rows_count = len(df)
+            # Columnas a mostrar
+            cols_to_show = ["Jugador"]
+            numeric_cols = []
+            
+            if df["Tarjeta"].notna().any():
+                cols_to_show.append("Tarjeta")
+                numeric_cols.append("Tarjeta")
+            if df["Roja"].notna().any():
+                cols_to_show.append("Roja")
+                numeric_cols.append("Roja")
+                
+            # Ordenar: Prioridad a Tarjeta (más común/baja cuota)
+            if "Tarjeta" in df.columns:
+                df = df.sort_values(by="Tarjeta")
+            elif "Roja" in df.columns:
+                 df = df.sort_values(by="Roja")
+                 
+            final_df = df[cols_to_show]
+            
+            # Estilos
+            styler = _apply_table_styles(final_df, numeric_cols)
+            
+            column_config = {
+                "Tarjeta": st.column_config.NumberColumn(format="%.2f"),
+                "Roja": st.column_config.NumberColumn(format="%.2f")
+            }
+            
+            # Altura dinámica
+            rows_count = len(final_df)
             dynamic_height = (rows_count + 1) * 35 + 3
             
             st.dataframe(
                 styler,
                 hide_index=True,
                 use_container_width=True,
-                column_config={
-                    "Sí": st.column_config.NumberColumn(format="%.2f")
-                },
+                column_config=column_config,
                 height=dynamic_height
             )
             st.markdown("")
 
-    # 2. Renderizar Otros (Cards estándar)
+    # 4. Renderizar Otros (Cards estándar - ej. Total tarjetas equipo)
     if other_markets:
-        st.markdown("---")
+        if player_list_markets: st.markdown("---")
         for m in other_markets:
             _render_as_card(m.get("label"), m.get("outcomes", []), {})
 
@@ -938,11 +985,8 @@ def _render_as_list(label: str, outcomes: list, label_map: dict):
              df_rc = pd.DataFrame(data)
              
              # Estilos
-             styler_rc = df_rc.style.set_properties(**{'text-align': 'center'}) \
-                                    .set_table_styles([
-                                        {'selector': 'th', 'props': [('text-align', 'center')]},
-                                        {'selector': 'td', 'props': [('text-align', 'center')]}
-                                    ])
+             # APLICAR ESTILOS CENTRALIZADOS
+             styler_rc = _apply_table_styles(df_rc, ["Cuota"])
 
              st.dataframe(
                  styler_rc, 
