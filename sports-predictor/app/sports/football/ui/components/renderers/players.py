@@ -44,10 +44,11 @@ def _get_player_weighted_prob(player_name: str, metric: str, threshold: float = 
         metric_map = {
             "goals": PlayerMatchStats.goals,
             "shots": PlayerMatchStats.shots,
-            "shots_on_goal": PlayerMatchStats.shots_on_goal,
-            "yellow_cards": PlayerMatchStats.yellow_cards,
-            "saves": PlayerMatchStats.saves,
+            "shots_on_goal": PlayerMatchStats.shots,  # Solo hay shots, no shots_on_goal
+            "yellow_cards": PlayerMatchStats.cards_yellow,
+            "cards_yellow": PlayerMatchStats.cards_yellow,
             "assists": PlayerMatchStats.assists
+            # saves no existe en el modelo actual
         }
         db_field = metric_map.get(metric)
         if db_field is None: return None
