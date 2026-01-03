@@ -100,14 +100,18 @@ def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: 
                 probs = {"Sí": min(prob_both, 0.95), "Yes": min(prob_both, 0.95), "No": max(1 - prob_both, 0.05)}
         elif ("mayor" in label_lower or "más" in label_lower) and ("esquina" in label_lower or "corner" in label_lower):
             # Mayor número de corners: 1X2
-            corners_winner = analysis_data.get("corners", {}).get("winner", {})
-            if corners_winner:
-                probs = {"1": corners_winner.get("home"), "X": corners_winner.get("draw"), "2": corners_winner.get("away")}
+            corners_data = analysis_data.get("corners") if analysis_data else None
+            if corners_data:
+                corners_winner = corners_data.get("winner", {})
+                if corners_winner:
+                    probs = {"1": corners_winner.get("home"), "X": corners_winner.get("draw"), "2": corners_winner.get("away")}
         elif ("mayor" in label_lower or "más" in label_lower) and "tarjeta" in label_lower:
             # Mayor número de tarjetas: 1X2
-            cards_winner = analysis_data.get("cards", {}).get("winner", {})
-            if cards_winner:
-                probs = {"1": cards_winner.get("home"), "X": cards_winner.get("draw"), "2": cards_winner.get("away")}
+            cards_data = analysis_data.get("cards") if analysis_data else None
+            if cards_data:
+                cards_winner = cards_data.get("winner", {})
+                if cards_winner:
+                    probs = {"1": cards_winner.get("home"), "X": cards_winner.get("draw"), "2": cards_winner.get("away")}
     
     n_cols = min(len(sorted_outcomes), 4)
     if n_cols == 0: n_cols = 1
