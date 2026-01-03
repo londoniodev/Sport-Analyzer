@@ -217,7 +217,12 @@ class FootballAPIClient(ISportAPIClient):
         current_year = datetime.now().year
         current_month = datetime.now().month
         # Si estamos en enero-julio, la temporada principal es la del año anterior
-        season = current_year if current_month >= 7 else current_year - 1
+        calculated_season = current_year if current_month >= 7 else current_year - 1
+        
+        # LIMITACIÓN PLAN GRATUITO: Solo permite 2022-2024
+        # Si la temporada calculada excede el límite, usar la más reciente permitida
+        MAX_FREE_SEASON = 2024
+        season = min(calculated_season, MAX_FREE_SEASON)
         
         logger.info(f"[API-GET] Team Fixtures: team={team_id}, season={season}")
         url = f"{BASE_URL}/fixtures"

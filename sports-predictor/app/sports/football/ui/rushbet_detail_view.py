@@ -31,7 +31,6 @@ from .components.renderers.players import (
     _render_goalkeeper_saves
 )
 from .components.styles import _apply_table_styles
-from app.sports.football.etl import FootballETL
 
 from app.sports.football.config.team_mapping import get_mapped_team_id
 
@@ -95,61 +94,36 @@ def show_match_detail_view():
         
         markets_raw = details.get("markets", {})
         
-        # --- FILA DE BOTONES DE ACCIÓN ---
-        col_v, col_d, col_a = st.columns([1, 2, 2])
-        with col_v:
-            if st.button("Volver", icon=":material/arrow_back:"):
-                st.session_state.rushbet_view = "list"
-                st.session_state.selected_event_id = None
-                st.rerun()
-                
-        with col_d:
-            if home_id and away_id:
-                if st.button("📥 Descargar Historial (Ult. 20)", help=f"Sincroniza los últimos 20 partidos de {home_team} y {away_team} desde API-Football"):
-                    with st.status("Sincronizando historial de equipos...", expanded=True) as status:
-                        etl = FootballETL()
-                        
-                        st.write(f"⏳ Sincronizando **{home_team}**...")
-                        h_count = etl.sync_team_history(home_id, 20)
-                        st.write(f"✅ {h_count} partidos procesados.")
-                        
-                        st.write(f"⏳ Sincronizando **{away_team}**...")
-                        a_count = etl.sync_team_history(away_id, 20)
-                        st.write(f"✅ {a_count} partidos procesados.")
-                        
-                        status.update(label="¡Historial Sincronizado!", state="complete", expanded=False)
-                    st.success(f"Sincronización finalizada: {h_count + a_count} partidos totales en base de datos.")
-            else:
-                st.error("⚠️ No se detectaron IDs de equipos. El botón de descarga está deshabilitado.")
-                with st.expander("Ver IDs Detectados (Debug)"):
-                    st.write(f"**Home:** {home_team} | ID: `{home_id}` {'(Mapeado)' if mapped_home_id else '(Scraper)'}")
-                    st.write(f"**Away:** {away_team} | ID: `{away_id}` {'(Mapeado)' if mapped_away_id else '(Scraper)'}")
+        # --- BOTÓN VOLVER ---
+        if st.button("← Volver a la lista", icon=":material/arrow_back:"):
+            st.session_state.rushbet_view = "list"
+            st.session_state.selected_event_id = None
+            st.rerun()
 
-        with col_a:
-            do_analysis = st.toggle("📈 Mostrar Análisis Dinámico", 
-                                    help="Calcula probabilidades en tiempo real usando el modelo Poisson Ajustado (Dixon-Coles + EWMA). Requiere haber descargado el historial.")
-
-        # --- CÁLCULO DE PREDICCIONES (Si aplica) - REUTILIZA SESIÓN ---
+        # --- CÁLCULO DE PREDICCIONES (AUTOMÁTICO) ---
         predictions = None
-        if do_analysis and home_id and away_id:
+        has_data = False
+        
+        if home_id and away_id:
             from app.sports.football.analytics import get_full_match_prediction
             
-            # Verificar si hay datos (usando la misma sesión)
+            # Verificar si hay datos en BD
             check_stmt = (
                 select(Fixture)
                 .where((Fixture.home_team_id == home_id) | (Fixture.away_team_id == home_id))
                 .limit(5)
             )
-            has_data = db_session.exec(check_stmt).first()
+            has_data = db_session.exec(check_stmt).first() is not None
             
             if has_data:
                 predictions = get_full_match_prediction(home_id, away_id, db_session)
-            else:
-                st.sidebar.warning("⚠️ No hay datos históricos para este equipo. Usa el botón 'Descargar Historial' para habilitar el análisis.")
-                do_analysis = False
     
     finally:
         db_session.close()
+    
+    # Mensaje si no hay datos
+    if not has_data and (home_id or away_id):
+        st.info("ℹ️ No hay datos históricos para estos equipos. Sincroniza su liga desde el Panel de Control para ver probabilidades.")
 
     # --- PROCESAMIENTO Y LIMPIEZA DE MERCADOS ---
     markets = _redistribute_markets(markets_raw)
@@ -184,7 +158,7 @@ def show_match_detail_view():
                     home_team, 
                     away_team, 
                     orden,
-                    analysis_data=predictions if do_analysis else None
+                    analysis_data=predictions
                 )
                 
         if not has_content:
@@ -220,7 +194,7 @@ def show_match_detail_view():
                         away_team, 
                         home_id, 
                         away_id,
-                        do_analysis=do_analysis
+                        do_analysis=has_data
                     )
                 has_players = True
                 
@@ -246,7 +220,7 @@ def show_match_detail_view():
                     home_team, 
                     away_team, 
                     orden,
-                    analysis_data=predictions if do_analysis else None
+                    analysis_data=predictions
                 )
 
         if not has_handicap:
