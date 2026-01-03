@@ -136,12 +136,16 @@ def get_card_html(label: str, odds: float, prob: float = None) -> str:
     </div>
     """
 
-def get_section_title_html(title: str) -> str:
+def get_section_title_html(title: str, coming_soon: bool = False) -> str:
     """
     Genera el HTML para un título de sección estandarizado.
     
-    Estilo:
-    - Margen inferior: 4px
-    - Fuente en negrita
+    Args:
+        title: Título de la sección
+        coming_soon: Si True, muestra badge "Próximamente" (requiere API Premium)
     """
-    return f"<p style='margin-bottom:4px;font-weight:bold;text-align:center;'>{title}</p>"
+    badge = ""
+    if coming_soon:
+        badge = "<span style='background:#fbbf24;color:#1f2937;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px;font-weight:normal;'>Próximamente</span>"
+    return f"<p style='margin-bottom:4px;font-weight:bold;text-align:center;'>{title}{badge}</p>"
+

@@ -3,6 +3,39 @@ import pandas as pd
 from ..styles import _apply_table_styles, get_card_html, get_section_title_html, render_styled_table
 from ..market_logic import _sort_markets_by_order, _get_market_format
 
+
+def _is_premium_market(label: str) -> bool:
+    """
+    Detecta si un mercado requiere datos de API Premium (estadísticas por mitad).
+    Retorna True si el mercado requiere datos de primera/segunda parte para:
+    - Corners por equipo por mitad
+    - Tarjetas por equipo por mitad
+    - Stats específicas por período que no sean goles
+    """
+    label_lower = label.lower()
+    
+    # Mercados que SÍ tenemos datos (goles por mitad)
+    goles_keywords = ["gol", "goal", "marcador", "resultado"]
+    if any(k in label_lower for k in goles_keywords):
+        return False
+    
+    # Mercados de mitad específica sin datos
+    half_keywords = ["1ª parte", "2ª parte", "1.ª parte", "2.ª parte", "mitad", "primera parte", "segunda parte"]
+    stat_keywords = ["esquina", "corner", "tarjeta", "card", "disparo", "shot", "falta", "foul"]
+    
+    is_half_specific = any(k in label_lower for k in half_keywords)
+    is_stat_market = any(k in label_lower for k in stat_keywords)
+    
+    # Si es un mercado de estadísticas por mitad específica -> Premium
+    if is_half_specific and is_stat_market:
+        return True
+    
+    # Mercados de equipo específico por mitad (ej: "Corners de Lecce - 2ª parte")
+    if " de " in label_lower and is_half_specific:
+        return True
+    
+    return False
+
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None, analysis_data: dict = None):
     """Renderiza los mercados de una categoría."""
     
@@ -51,7 +84,8 @@ def _render_category_markets(markets: list, home_team: str, away_team: str, orde
 
 def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: dict = None):
     """Renderiza mercado como cards horizontales con probabilidades opcionales."""
-    st.markdown(get_section_title_html(label), unsafe_allow_html=True)
+    is_premium = _is_premium_market(label)
+    st.markdown(get_section_title_html(label, coming_soon=is_premium), unsafe_allow_html=True)
     
     unique_outcomes = {}
     for out in outcomes:
@@ -146,7 +180,8 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
     has_lines = any(out.get("line") for out in outcomes)
     
     if has_lines:
-        st.markdown(get_section_title_html(label), unsafe_allow_html=True)
+        is_premium = _is_premium_market(label)
+        st.markdown(get_section_title_html(label, coming_soon=is_premium), unsafe_allow_html=True)
         
         lines_data = {}
         processed_keys = set()
@@ -315,7 +350,8 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
         is_half_time_full_time = "descanso" in label_lower or "medio tiempo" in label_lower
         
         if is_result_correct or is_half_time_full_time:
-             st.markdown(get_section_title_html(label), unsafe_allow_html=True)
+             is_premium = _is_premium_market(label)
+             st.markdown(get_section_title_html(label, coming_soon=is_premium), unsafe_allow_html=True)
              
              # Obtener matriz de probabilidades Poisson si está disponible
              score_matrix = analysis_data.get("score_matrix", {}) if analysis_data else {}
