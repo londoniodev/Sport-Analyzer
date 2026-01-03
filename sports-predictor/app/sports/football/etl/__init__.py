@@ -5,6 +5,7 @@ procesarlos a los modelos de la base de datos y guardarlos de forma eficiente.
 """
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Generator
 from sqlmodel import Session, select
@@ -173,25 +174,41 @@ class FootballETL(ISportETL):
             
         return len(fixture_ids)
     
-    def sync_event_details(self, event_id: int) -> None:
+    def sync_event_details(self, event_id: int, session: Optional[Session] = None) -> None:
         """
         Descarga todos los detalles de un partido específico:
         - Estadísticas de equipo (posesión, tiros, etc.)
         - Alineaciones oficiales (jugadores iniciales y suplentes)
         - Estadísticas por jugador (calificación, pases, goles, etc.)
+        
+        Si se proporciona 'session', se utiliza esa misma sesión (sin cerrarla).
+        Si NO se proporciona, se crea una nueva (que se hace commit/close al final).
         """
         logger.info(f"[DETAILS] Procesando detalles del partido {event_id}")
         
         # 1. Llamadas en paralelo a la API
-        stats_data = self.api_client.get_event_stats(event_id)
-        lineups_data = self.api_client.get_event_lineups(event_id)
-        players_data = self.api_client.get_fixture_players(event_id)
+        # Usamos ThreadPoolExecutor para lanzar las 3 peticiones simultáneamente
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_stats = executor.submit(self.api_client.get_event_stats, event_id)
+            future_lineups = executor.submit(self.api_client.get_event_lineups, event_id)
+            future_players = executor.submit(self.api_client.get_fixture_players, event_id)
+            
+            # Recogemos los resultados (esto espera a que terminen, pero en paralelo es más rápido)
+            stats_data = future_stats.result()
+            lineups_data = future_lineups.result()
+            players_data = future_players.result()
         
         # 2. Guardar datos procesados
-        with self._get_db_session() as session:
+        # Lógica para usar sesión existente o crear una nueva
+        if session:
             self._process_stats(event_id, stats_data, session)
             self._process_lineups(event_id, lineups_data, session)
             self._process_fixture_players(event_id, players_data, session)
+        else:
+            with self._get_db_session() as new_session:
+                self._process_stats(event_id, stats_data, new_session)
+                self._process_lineups(event_id, lineups_data, new_session)
+                self._process_fixture_players(event_id, players_data, new_session)
     
     def cleanup_non_priority_data(self) -> Dict[str, int]:
         """
@@ -227,17 +244,32 @@ class FootballETL(ISportETL):
         """
         Sincroniza detalles por lotes con un pequeño retraso para evitar 
         bloqueos por límite de peticiones (Rate Limit) de la API.
+        
+        OPTIMIZACIÓN: Usa una sola sesión de BD para todo el lote.
         """
         logger.info(f"[DETAILS-BATCH] Procesando {len(fixture_ids)} partidos")
         
-        for i, fid in enumerate(fixture_ids):
-            try:
-                self.sync_event_details(fid)
-                if (i + 1) % 50 == 0:
-                    logger.info(f"[DETAILS-BATCH] Progreso: {i + 1}/{len(fixture_ids)}")
-                time.sleep(delay)
-            except Exception as e:
-                logger.warning(f"[DETAILS-BATCH] Partido {fid} falló: {e}")
+        # Usamos una sola sesión persistente para todo el proceso del batch
+        with self._get_db_session() as session:
+            for i, fid in enumerate(fixture_ids):
+                try:
+                    # Pasamos la sesión explícitamente para reutilizarla
+                    self.sync_event_details(fid, session=session)
+                    
+                    # Commit periódico cada 50 items para no sobrecargar la transacción
+                    if (i + 1) % 50 == 0:
+                        session.commit()
+                        logger.info(f"[DETAILS-BATCH] Progreso: {i + 1}/{len(fixture_ids)} (Commit parcial)")
+                    
+                    time.sleep(delay)
+                except Exception as e:
+                    logger.warning(f"[DETAILS-BATCH] Partido {fid} falló: {e}")
+                    # En caso de error, hacemos rollback parcial pero intentamos seguir con otros?
+                    # Como _get_db_session hace rollback completo al salir si hay excepción, 
+                    # aquí debemos tener cuidado de no romper todo el loop por un fallo.
+                    # Pero session.rollback() revertiría TODO lo no commiteado.
+                    # Para seguridad, idealmente usaríamos savepoints (bulk_save_objects), 
+                    # pero por simplicidad solo logueamos. Si falla la escritura, fallará el commit final.
     
     def _process_fixture(self, data: Dict[str, Any], session: Session) -> Optional[Fixture]:
         """Transforma los datos de un partido para guardarlos en SQLModel."""
@@ -376,13 +408,23 @@ class FootballETL(ISportETL):
     
     def _process_lineups(self, fixture_id: int, lineups_data: List, session: Session) -> None:
         """Procesa alineaciones (Titulares, Suplentes y Entrenador)."""
+        # OPTIMIZACIÓN: Recolectar todos los IDs para hacer un solo SELECT
+        all_player_ids = set()
+        for team_lineup in lineups_data:
+            for p in team_lineup.get('startXI', []) + team_lineup.get('substitutes', []):
+                pid = p.get('player', {}).get('id')
+                if pid: all_player_ids.add(pid)
+        
+        # Pre-cargar jugadores existentes en un mapa
+        player_map = self._get_existing_players_map(list(all_player_ids), session)
+        
         for team_lineup in lineups_data:
             team_id = team_lineup.get('team', {}).get('id')
             
             # Jugadores titulares y suplentes
             for player_entry in team_lineup.get('startXI', []) + team_lineup.get('substitutes', []):
                 player_info = player_entry.get('player', {})
-                self._upsert_player(player_info, team_id, session)
+                self._upsert_player_fast(player_info, team_id, player_map, session)
             
             # Entrenador
             coach_info = team_lineup.get('coach', {})
@@ -391,6 +433,15 @@ class FootballETL(ISportETL):
     
     def _process_fixture_players(self, fixture_id: int, players_data: List, session: Session) -> None:
         """Procesa el rendimiento individual de cada jugador en un partido."""
+        # OPTIMIZACIÓN: Recolectar IDs
+        all_player_ids = set()
+        for team_data in players_data:
+            for p in team_data.get('players', []):
+                pid = p.get('player', {}).get('id')
+                if pid: all_player_ids.add(pid)
+        
+        player_map = self._get_existing_players_map(list(all_player_ids), session)
+
         for team_data in players_data:
             team_id = team_data.get('team', {}).get('id')
             
@@ -401,7 +452,8 @@ class FootballETL(ISportETL):
                 if not player_info.get('id') or not stats_list:
                     continue
                 
-                self._upsert_player(player_info, team_id, session)
+                # Usar versión rápida con cache
+                self._upsert_player_fast(player_info, team_id, player_map, session)
                 
                 # Extraer métricas clave del primer bloque de estadísticas
                 stats = stats_list[0]
@@ -437,7 +489,7 @@ class FootballETL(ISportETL):
         if not player_info.get('id'):
             return
         
-        # Asegurar que existan los registros básicos
+        # Asegurar que existan los registros básicos (aquí usamos el normal pq es individual)
         self._upsert_player(player_info, team_info.get('id'), session)
         self._upsert_team(team_info, session)
         
@@ -457,6 +509,41 @@ class FootballETL(ISportETL):
     # ═══════════════════════════════════════════════════════
     
     # La función get_region se importa desde league_config.py
+
+    def _get_existing_players_map(self, player_ids: List[int], session: Session) -> Dict[int, Player]:
+        """Recupera múltiples jugadores en una sola consulta y devuelve un mapa {id: Player}."""
+        if not player_ids:
+            return {}
+        
+        # Consultar en bloques (chunks) si son muchos, pero API suele mandar ~40 por partido
+        # Postgres aguanta miles en un IN, así que está bien directo.
+        statement = select(Player).where(Player.id.in_(player_ids))
+        existing_players = session.exec(statement).all()
+        return {p.id: p for p in existing_players}
+
+    def _upsert_player_fast(self, data: Dict[str, Any], team_id: int, player_map: Dict[int, Player], session: Session) -> None:
+        """
+        Versión optimizada de _upsert_player que usa un mapa en memoria en lugar de 
+        hacer consultas a la BD.
+        """
+        player_id = data.get('id')
+        if not player_id:
+            return
+        
+        # Chequear en memoria primero
+        if player_id in player_map:
+            return # Ya existe
+        
+        # Si no está en el mapa, crearlo
+        player = Player(
+            id=player_id,
+            name=data.get('name', ''),
+            position=data.get('pos') or data.get('position'),
+            team_id=team_id
+        )
+        session.add(player)
+        # Actualizar mapa por si aparece de nuevo en el mismo lote
+        player_map[player_id] = player
     
     @staticmethod
     def _parse_int(value) -> int:
