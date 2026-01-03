@@ -138,6 +138,7 @@ def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> D
         "btts": preds["btts"],
         "over_under": preds["over_under"],
         "correct_score_top5": preds["correct_score"],
+        "score_matrix": preds["correct_score"],  # Matriz completa para Resultado Correcto
         "halftime": ht_preds,
         "handicaps": handicaps
     }

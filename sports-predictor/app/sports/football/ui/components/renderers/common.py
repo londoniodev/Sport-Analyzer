@@ -46,11 +46,11 @@ def _render_category_markets(markets: list, home_team: str, away_team: str, orde
         if is_list:
             _render_as_list(label, outcomes, label_map, analysis_data)
         else:
-            _render_as_card(label, outcomes, label_map)
+            _render_as_card(label, outcomes, label_map, analysis_data)
 
 
-def _render_as_card(label: str, outcomes: list, label_map: dict):
-    """Renderiza mercado como cards horizontales."""
+def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: dict = None):
+    """Renderiza mercado como cards horizontales con probabilidades opcionales."""
     st.markdown(get_section_title_html(label), unsafe_allow_html=True)
     
     unique_outcomes = {}
@@ -59,6 +59,21 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
         unique_outcomes[key] = out
     
     sorted_outcomes = list(unique_outcomes.values())
+    
+    # Obtener probabilidades según el tipo de mercado
+    probs = {}
+    label_lower = label.lower()
+    if analysis_data:
+        if "resultado final" in label_lower or label_lower == "1x2":
+            data_1x2 = analysis_data.get("1x2", {})
+            probs = {"1": data_1x2.get("home_win"), "X": data_1x2.get("draw"), "2": data_1x2.get("away_win")}
+        elif "ambos equipos" in label_lower or "btts" in label_lower:
+            data_btts = analysis_data.get("btts", {})
+            probs = {"Sí": data_btts.get("yes"), "Yes": data_btts.get("yes"), "No": data_btts.get("no")}
+        elif "doble oportunidad" in label_lower:
+            data_1x2 = analysis_data.get("1x2", {})
+            h, d, a = data_1x2.get("home_win", 0), data_1x2.get("draw", 0), data_1x2.get("away_win", 0)
+            probs = {"1X": h + d, "12": h + a, "X2": d + a}
     
     n_cols = min(len(sorted_outcomes), 4)
     if n_cols == 0: n_cols = 1
@@ -74,13 +89,16 @@ def _render_as_card(label: str, outcomes: list, label_map: dict):
             if line:
                 display_label = f"{display_label} ({line})"
             
+            # Obtener probabilidad si existe
+            prob = probs.get(out_label)
+            
             # Negrita para equipos/empate en resultado final
             if out_label in ["1", "X", "2"] and "resultado final" in label.lower():
                 display_label = f"<b>{display_label}</b>"
             elif out_label in label_map.values(): 
                  display_label = f"<b>{display_label}</b>"
 
-            st.markdown(get_card_html(display_label, odds), unsafe_allow_html=True)
+            st.markdown(get_card_html(display_label, odds, prob), unsafe_allow_html=True)
     
     st.markdown("")
 
@@ -95,9 +113,14 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
         lines_data = {}
         processed_keys = set()
         
-        # Datos de Poisson Over/Under si están disponibles
+        # Datos de Poisson si están disponibles
         poisson_ou = analysis_data.get("over_under", {}) if analysis_data else {}
-        is_total_goals = "total de goles" in label.lower() and "equipo" not in label.lower()
+        poisson_handicaps = analysis_data.get("handicaps", {}) if analysis_data else {}
+        
+        # Detectar tipo de mercado
+        label_lower = label.lower()
+        is_total_goals = "total de goles" in label_lower and "equipo" not in label_lower
+        is_handicap = "hándicap" in label_lower or "handicap" in label_lower or "asiático" in label_lower
         
         for out in outcomes:
             raw_line = out.get("line")
@@ -148,9 +171,23 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
             lines_data[line_sort_key][display_label] = odds
             
             # --- INYECCIÓN DE PROBABILIDAD (POISSON) ---
+            # Over/Under
             if is_total_goals and str(line_sort_key) in poisson_ou:
                 p_data = poisson_ou[str(line_sort_key)]
                 prob_val = p_data["over"] if out_label == "Over" else p_data["under"]
+                prob_col_name = f"Prob. % ({display_label})"
+                lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+            
+            # Handicap Asiático
+            if is_handicap and str(line_sort_key) in poisson_handicaps:
+                h_data = poisson_handicaps[str(line_sort_key)]
+                # Mapear labels: "1" = home win, "2" = away win
+                if out_label == "1":
+                    prob_val = h_data.get("win", 0)
+                elif out_label == "2":
+                    prob_val = h_data.get("loss", 0)
+                else:
+                    prob_val = h_data.get("push", 0)
                 prob_col_name = f"Prob. % ({display_label})"
                 lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
 
@@ -215,6 +252,9 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
         if is_result_correct or is_half_time_full_time:
              st.markdown(get_section_title_html(label), unsafe_allow_html=True)
              
+             # Obtener matriz de probabilidades Poisson si está disponible
+             score_matrix = analysis_data.get("score_matrix", {}) if analysis_data else {}
+             
              if is_result_correct:
                  def get_score_sort_key(outcome):
                      lbl = outcome.get("label", "")
@@ -236,21 +276,43 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
                  col_name_res = "Descanso / Final"
              
              for out in final_outcomes:
-                 data.append({
-                     col_name_res: out.get("label"),
+                 lbl = out.get("label", "")
+                 row = {
+                     col_name_res: lbl,
                      "Cuota": out.get("odds")
-                 })
+                 }
+                 
+                 # Agregar probabilidad Poisson si está disponible
+                 if score_matrix and is_result_correct and "-" in lbl:
+                     try:
+                         parts = lbl.split("-")
+                         home_goals = int(''.join(filter(str.isdigit, parts[0])))
+                         away_goals = int(''.join(filter(str.isdigit, parts[1])))
+                         score_key = f"{home_goals}-{away_goals}"
+                         if score_key in score_matrix:
+                             row["Prob. %"] = round(score_matrix[score_key] * 100, 1)
+                     except:
+                         pass
+                 
+                 data.append(row)
              
              df_rc = pd.DataFrame(data)
-             styler_rc = _apply_table_styles(df_rc, ["Cuota"])
+             
+             # Columnas numéricas
+             numeric_cols = ["Cuota"]
+             col_config = {"Cuota": st.column_config.NumberColumn(format="%.2f")}
+             
+             if "Prob. %" in df_rc.columns:
+                 numeric_cols.append("Prob. %")
+                 col_config["Prob. %"] = st.column_config.NumberColumn(format="%.1f%%")
+             
+             styler_rc = _apply_table_styles(df_rc, numeric_cols)
 
              st.dataframe(
                  styler_rc, 
                  hide_index=True, 
                  width='stretch',
-                 column_config={
-                     "Cuota": st.column_config.NumberColumn(format="%.2f")
-                 }
+                 column_config=col_config
              )
         else:
              _render_as_card(label, final_outcomes, label_map)

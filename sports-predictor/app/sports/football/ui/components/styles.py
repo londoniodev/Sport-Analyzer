@@ -106,20 +106,33 @@ def render_styled_table(df: pd.DataFrame, numeric_cols: list = None):
     """
     return f'<div class="dataframe-container">{css}{html}</div>'
 
-def get_card_html(label: str, odds: float) -> str:
+def get_card_html(label: str, odds: float, prob: float = None) -> str:
     """
     Genera el HTML para una 'Card' de apuesta estandarizada.
     
     Estilo:
     - Fondo oscuro (#0E1117)
-    - Borde sutil (#2d5a87)
+    - Borde sutil (#4a5568)
     - Label blanco
     - Cuota verde neón (#22c55e) grande y negrita
+    - Probabilidad en amarillo si está disponible
+    
+    Args:
+        label: Etiqueta del outcome
+        odds: Cuota decimal
+        prob: Probabilidad (0.0 - 1.0) opcional
     """
+    # Formatear cuota y probabilidad
+    if prob is not None:
+        prob_pct = round(prob * 100, 1)
+        value_display = f"{odds:.2f} <span style='color:#FFD700;font-size:14px;'>({prob_pct}%)</span>"
+    else:
+        value_display = f"{odds:.2f}"
+    
     return f"""
     <div style="background:#0E1117;border:1px solid #4a5568;border-radius:8px;padding:10px;text-align:center;margin:2px;height:100%;">
         <div style="color:#ffffff;font-size:11px;line-height:1.2;margin-bottom:4px;">{label}</div>
-        <div style="color:#22c55e;font-size:18px;font-weight:bold;">{odds:.2f}</div>
+        <div style="color:#22c55e;font-size:18px;font-weight:bold;">{value_display}</div>
     </div>
     """
 
