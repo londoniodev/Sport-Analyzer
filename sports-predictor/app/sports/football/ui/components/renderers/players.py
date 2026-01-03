@@ -29,7 +29,7 @@ def _get_player_weighted_prob(player_name: str, metric: str, threshold: float = 
     """
     from app.core.database import get_session
     from app.sports.football.models import PlayerMatchStats, Player, Fixture
-    from app.sports.football.analytics.team_stats import calculate_dynamic_weighted_avg
+    from app.sports.football.analytics.data.team_stats import calculate_dynamic_weighted_avg
     from sqlmodel import select
     
     with next(get_session()) as session:
@@ -100,7 +100,7 @@ def _render_scorers_markets(markets: list, home_team: str, away_team: str, home_
     if do_analysis:
         from app.core.database import get_session
         from app.sports.football.models import PlayerMatchStats, Player, Fixture
-        from app.sports.football.analytics.team_stats import calculate_dynamic_weighted_avg
+        from app.sports.football.analytics.data.team_stats import calculate_dynamic_weighted_avg
         from sqlmodel import select, or_
         
         with next(get_session()) as session:
