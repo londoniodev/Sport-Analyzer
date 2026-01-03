@@ -4,37 +4,39 @@ from ..styles import _apply_table_styles, get_card_html, get_section_title_html,
 from ..market_logic import _sort_markets_by_order, _get_market_format
 
 
+# Mercados que requieren API Premium (estadísticas por mitad)
+# Basado en constants.py - mercados de 1ª/2ª parte para corners, tarjetas, disparos
+PREMIUM_MARKET_PATTERNS = [
+    # Corners por mitad
+    "total de tiros de esquina - 1",
+    "total de tiros de esquina - 1.ª parte",
+    "total de tiros de esquina - 2",
+    "total de tiros de esquina - 2.ª parte",
+    "número total de tiros de esquina por parte de",  # Por equipo por mitad
+    "más córners - 1",
+    "más córners - 1.ª parte",
+    "más córners - 2",
+    "más córners - 2.ª parte",
+    # Tarjetas por mitad (si existieran)
+    "total de tarjetas - 1",
+    "total de tarjetas - 2",
+    "mayor número de tarjetas - 1",
+    "mayor número de tarjetas - 2",
+    # Disparos por mitad (si existieran)
+    "número total de disparos - 1",
+    "número total de disparos - 2",
+    "más tiros a puerta - 1",
+    "más tiros a puerta - 2",
+]
+
+
 def _is_premium_market(label: str) -> bool:
     """
-    Detecta si un mercado requiere datos de API Premium (estadísticas por mitad).
-    Retorna True si el mercado requiere datos de primera/segunda parte para:
-    - Corners por equipo por mitad
-    - Tarjetas por equipo por mitad
-    - Stats específicas por período que no sean goles
+    Detecta si un mercado requiere datos de API Premium.
+    Usa lista explícita de mercados definidos en PREMIUM_MARKET_PATTERNS.
     """
     label_lower = label.lower()
-    
-    # Mercados que SÍ tenemos datos (goles por mitad)
-    goles_keywords = ["gol", "goal", "marcador", "resultado"]
-    if any(k in label_lower for k in goles_keywords):
-        return False
-    
-    # Mercados de mitad específica sin datos
-    half_keywords = ["1ª parte", "2ª parte", "1.ª parte", "2.ª parte", "mitad", "primera parte", "segunda parte"]
-    stat_keywords = ["esquina", "corner", "tarjeta", "card", "disparo", "shot", "falta", "foul"]
-    
-    is_half_specific = any(k in label_lower for k in half_keywords)
-    is_stat_market = any(k in label_lower for k in stat_keywords)
-    
-    # Si es un mercado de estadísticas por mitad específica -> Premium
-    if is_half_specific and is_stat_market:
-        return True
-    
-    # Mercados de equipo específico por mitad (ej: "Corners de Lecce - 2ª parte")
-    if " de " in label_lower and is_half_specific:
-        return True
-    
-    return False
+    return any(pattern in label_lower for pattern in PREMIUM_MARKET_PATTERNS)
 
 def _render_category_markets(markets: list, home_team: str, away_team: str, orden: list = None, analysis_data: dict = None):
     """Renderiza los mercados de una categoría."""
