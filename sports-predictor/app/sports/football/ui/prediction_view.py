@@ -353,7 +353,7 @@ def _display_predictions(home_name, away_name, home_xg, away_xg,
                     "Over (%)": st.column_config.ProgressColumn("Over", format="%.1f%%", min_value=0, max_value=1),
                     "Under (%)": st.column_config.ProgressColumn("Under", format="%.1f%%", min_value=0, max_value=1),
                 },
-                hide_index=True, use_container_width=True
+                hide_index=True, width='stretch'
             )
         
         with col2:
@@ -389,12 +389,12 @@ def _display_predictions(home_name, away_name, home_xg, away_xg,
             st.markdown(f"**{home_name}**")
             st.dataframe(pd.DataFrame(ah_data_home).sort_values("Línea"), 
                         column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
-                        hide_index=True, use_container_width=True)
+                        hide_index=True, width='stretch')
         with col2:
             st.markdown(f"**{away_name}**")
             st.dataframe(pd.DataFrame(ah_data_away).sort_values("Línea"),
                         column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
-                        hide_index=True, use_container_width=True)
+                        hide_index=True, width='stretch')
     
     # TAB 3: EXACT SCORE
     with tab3:
@@ -426,7 +426,7 @@ def _display_predictions(home_name, away_name, home_xg, away_xg,
                 })
             st.dataframe(pd.DataFrame(corners_data),
                         column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
-                        hide_index=True, use_container_width=True)
+                        hide_index=True, width='stretch')
         
         with col2:
             st.markdown("#### Córners Esperados")
@@ -448,7 +448,7 @@ def _display_predictions(home_name, away_name, home_xg, away_xg,
                 })
             st.dataframe(pd.DataFrame(cards_data),
                         column_config={"Probabilidad": st.column_config.ProgressColumn("Prob", format="%.1f%%", min_value=0, max_value=1)},
-                        hide_index=True, use_container_width=True)
+                        hide_index=True, width='stretch')
         
         with col2:
             st.markdown("#### Tarjetas Esperadas")

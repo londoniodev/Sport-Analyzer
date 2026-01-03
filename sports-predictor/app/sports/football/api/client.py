@@ -201,6 +201,9 @@ class FootballAPIClient(ISportAPIClient):
         Fetch last N played fixtures for a specific team.
         Only returns finished matches (status = 'FT').
         
+        NOTA: El plan gratuito de API-Football no soporta el parámetro 'last'.
+        Por eso usamos 'season' + filtrado local para obtener los últimos N partidos.
+        
         Args:
             team_id: ID del equipo
             last_n: Número de últimos partidos a obtener
@@ -208,11 +211,19 @@ class FootballAPIClient(ISportAPIClient):
         Returns:
             Lista de fixtures ordenados del más reciente al más antiguo
         """
-        logger.info(f"[API-GET] Team Fixtures: team={team_id}, last={last_n}")
+        from datetime import datetime
+        
+        # Obtener temporada actual (o la anterior si estamos a principio de año)
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        # Si estamos en enero-julio, la temporada principal es la del año anterior
+        season = current_year if current_month >= 7 else current_year - 1
+        
+        logger.info(f"[API-GET] Team Fixtures: team={team_id}, season={season}")
         url = f"{BASE_URL}/fixtures"
         params = {
             'team': team_id,
-            'last': last_n,
+            'season': season,
             'status': 'FT'  # Solo partidos finalizados
         }
         
@@ -232,8 +243,17 @@ class FootballAPIClient(ISportAPIClient):
                 return []
             
             data = json_data.get('response', [])
-            logger.info(f"[API-SUCCESS] Fetched {len(data)} fixtures for team {team_id}")
-            return data
+            
+            # Ordenar por fecha descendente y tomar los últimos N
+            sorted_fixtures = sorted(
+                data, 
+                key=lambda x: x.get('fixture', {}).get('date', ''),
+                reverse=True
+            )
+            
+            result = sorted_fixtures[:last_n]
+            logger.info(f"[API-SUCCESS] Fetched {len(result)} of {len(data)} fixtures for team {team_id}")
+            return result
             
         except requests.exceptions.RequestException as e:
             logger.error(f"[API-EXCEPTION] {type(e).__name__}: {e}")

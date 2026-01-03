@@ -40,7 +40,7 @@ def _show_events_list():
     col1, col2 = st.columns([1, 4])
     
     with col1:
-        load_btn = st.button("Cargar Eventos", icon=":material/refresh:", type="primary", use_container_width=True)
+        load_btn = st.button("Cargar Eventos", icon=":material/refresh:", type="primary", width='stretch')
         
     if load_btn:
         with st.spinner("Conectando con Rushbet/Kambi..."):
@@ -163,7 +163,7 @@ def _render_event_card(event):
             st.markdown(f"<span style='color: #ef4444;'>{odds_2:.2f}</span>" if odds_2 else "-", unsafe_allow_html=True)
         
         with cols[7]:
-            if st.button("Ver más", key=f"detail_{event_id}", icon=":material/open_in_new:", use_container_width=True):
+            if st.button("Ver más", key=f"detail_{event_id}", icon=":material/open_in_new:", width='stretch'):
                 st.session_state.selected_event_id = event_id
                 st.session_state.selected_event_data = event.to_dict()
                 st.session_state.rushbet_view = "detail"

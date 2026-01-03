@@ -108,10 +108,10 @@ def main():
                     label = view_labels.get(view_key, view_key.title())
                     
                     if view_key == st.session_state.selected_view:
-                        if st.button(label, use_container_width=True, key=f"nav_{view_key}", type="primary"):
+                        if st.button(label, width='stretch', key=f"nav_{view_key}", type="primary"):
                              pass 
                     else:
-                        if st.button(label, use_container_width=True, key=f"nav_{view_key}"):
+                        if st.button(label, width='stretch', key=f"nav_{view_key}"):
                             st.session_state.selected_view = view_key
                             st.rerun()
         else:

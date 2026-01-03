@@ -57,7 +57,7 @@ def render_bottom_nav():
                 item["label"], 
                 key=f"mob_nav_{item['key']}", 
                 type=btn_type, 
-                use_container_width=True
+                width='stretch'
             ):
                 if current_view != item["key"]:
                     st.session_state.selected_view = item["key"]

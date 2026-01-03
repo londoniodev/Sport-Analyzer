@@ -201,7 +201,7 @@ def _render_scorers_markets(markets: list, home_team: str, away_team: str, home_
     st.dataframe(
         styler, 
         hide_index=True, 
-        use_container_width=True,
+        width='stretch',
         column_config=column_config,
         height=dynamic_height
     )
@@ -283,7 +283,7 @@ def _render_player_cards_markets(markets: list, home_team: str, away_team: str, 
             st.dataframe(
                 styler,
                 hide_index=True,
-                use_container_width=True,
+                width='stretch',
                 column_config=column_config,
                 height=dynamic_height
             )
@@ -393,7 +393,7 @@ def _render_generic_player_table(markets: list, title: str,
     st.dataframe(
         styler,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         column_config=col_config,
         height=min((len(df) + 1) * 35 + 3, 500)
     )
@@ -481,7 +481,7 @@ def _render_player_specials(markets: list, home_team: str, away_team: str, home_
     valid_numerics = [c for c in numerics if c in df.columns]
     
     styler = _apply_table_styles(df, valid_numerics)
-    st.dataframe(styler, hide_index=True, use_container_width=True, height=(len(df)+1)*35+3)
+    st.dataframe(styler, hide_index=True, width='stretch', height=(len(df)+1)*35+3)
 
 
 def _render_player_assists(markets: list, home_team: str, away_team: str, home_id=None, away_id=None, do_analysis: bool = False):

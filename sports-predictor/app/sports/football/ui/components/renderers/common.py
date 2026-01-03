@@ -196,7 +196,7 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
             st.dataframe(
                 styler, 
                 hide_index=True, 
-                use_container_width=True,
+                width='stretch',
                 column_config=column_config
             )
     else:
@@ -247,7 +247,7 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
              st.dataframe(
                  styler_rc, 
                  hide_index=True, 
-                 use_container_width=True,
+                 width='stretch',
                  column_config={
                      "Cuota": st.column_config.NumberColumn(format="%.2f")
                  }

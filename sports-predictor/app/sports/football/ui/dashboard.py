@@ -162,13 +162,13 @@ def show_dashboard():
         b1, b2, b3 = st.columns(3)
         
         with b1:
-            sync_button = st.button("Sincronizar Liga", type="primary", use_container_width=True)
+            sync_button = st.button("Sincronizar Liga", type="primary", width='stretch')
         
         with b2:
-            batch_btn = st.button("Sync Prioritarias", type="secondary", use_container_width=True, help="Todas las Tier 1 y 2")
+            batch_btn = st.button("Sync Prioritarias", type="secondary", width='stretch', help="Todas las Tier 1 y 2")
              
         with b3:
-            injuries_btn = st.button("Sync Lesiones", type="secondary", use_container_width=True)
+            injuries_btn = st.button("Sync Lesiones", type="secondary", width='stretch')
 
         # Logic implementation
         if sync_button:

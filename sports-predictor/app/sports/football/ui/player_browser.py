@@ -102,7 +102,7 @@ def show_player_browser():
         df = pd.DataFrame(data)
         st.dataframe(
             df, 
-            use_container_width=True,
+            width='stretch',
             column_config={
                 "ID": st.column_config.NumberColumn(format="%d"),
             }
