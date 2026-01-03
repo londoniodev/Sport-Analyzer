@@ -121,12 +121,102 @@ def predict_handicap_markets(home_xg: float, away_xg: float, max_goals: int = 8)
         
     return handicaps
 
+
+def predict_corners_markets(home_corners_avg: float, away_corners_avg: float) -> Dict:
+    """Predice mercados de corners usando Poisson simple."""
+    total_expected = home_corners_avg + away_corners_avg
+    
+    # Over/Under para corners
+    thresholds = [4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5]
+    over_under = {}
+    
+    for t in thresholds:
+        over_prob = 1 - PoissonEngine.get_cumulative_probability(total_expected, int(t))
+        over_under[str(t)] = {"over": round(over_prob, 4), "under": round(1 - over_prob, 4)}
+    
+    # Quién tendrá más corners (1X2)
+    home_prob = 0.0
+    draw_prob = 0.0
+    away_prob = 0.0
+    
+    for h in range(15):
+        for a in range(15):
+            p_h = PoissonEngine.get_probability(home_corners_avg, h)
+            p_a = PoissonEngine.get_probability(away_corners_avg, a)
+            joint = p_h * p_a
+            if h > a:
+                home_prob += joint
+            elif h < a:
+                away_prob += joint
+            else:
+                draw_prob += joint
+    
+    return {
+        "expected": {"home": round(home_corners_avg, 2), "away": round(away_corners_avg, 2), "total": round(total_expected, 2)},
+        "over_under": over_under,
+        "winner": {"home": round(home_prob, 4), "draw": round(draw_prob, 4), "away": round(away_prob, 4)}
+    }
+
+
+def predict_cards_markets(home_cards_avg: float, away_cards_avg: float) -> Dict:
+    """Predice mercados de tarjetas usando Poisson simple."""
+    total_expected = home_cards_avg + away_cards_avg
+    
+    # Over/Under para tarjetas
+    thresholds = [2.5, 3.5, 4.5, 5.5, 6.5]
+    over_under = {}
+    
+    for t in thresholds:
+        over_prob = 1 - PoissonEngine.get_cumulative_probability(total_expected, int(t))
+        over_under[str(t)] = {"over": round(over_prob, 4), "under": round(1 - over_prob, 4)}
+    
+    # Quién tendrá más tarjetas (1X2)
+    home_prob = 0.0
+    draw_prob = 0.0
+    away_prob = 0.0
+    
+    for h in range(10):
+        for a in range(10):
+            p_h = PoissonEngine.get_probability(home_cards_avg, h)
+            p_a = PoissonEngine.get_probability(away_cards_avg, a)
+            joint = p_h * p_a
+            if h > a:
+                home_prob += joint
+            elif h < a:
+                away_prob += joint
+            else:
+                draw_prob += joint
+    
+    return {
+        "expected": {"home": round(home_cards_avg, 2), "away": round(away_cards_avg, 2), "total": round(total_expected, 2)},
+        "over_under": over_under,
+        "winner": {"home": round(home_prob, 4), "draw": round(draw_prob, 4), "away": round(away_prob, 4)}
+    }
+
+
 def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> Dict:
     """Función de alto nivel para la UI que integra xG y Predicciones."""
+    from app.sports.football.analytics.data.team_stats import (
+        get_team_corners_avg,
+        get_team_cards_avg
+    )
+    
     home_xg, away_xg = calculate_expected_goals(home_id, away_id, session)
     preds = predict_goals_markets(home_xg, away_xg)
     ht_preds = predict_halftime_markets(home_xg, away_xg)
     handicaps = predict_handicap_markets(home_xg, away_xg)
+    
+    # Corners predictions
+    home_corners = get_team_corners_avg(home_id, 20, session)
+    away_corners = get_team_corners_avg(away_id, 20, session)
+    corners_preds = predict_corners_markets(home_corners, away_corners) if (home_corners + away_corners) > 0 else None
+    
+    # Cards predictions
+    home_cards = get_team_cards_avg(home_id, 20, session)
+    away_cards = get_team_cards_avg(away_id, 20, session)
+    home_cards_total = home_cards.get("yellow", 0) + home_cards.get("red", 0)
+    away_cards_total = away_cards.get("yellow", 0) + away_cards.get("red", 0)
+    cards_preds = predict_cards_markets(home_cards_total, away_cards_total) if (home_cards_total + away_cards_total) > 0 else None
     
     return {
         "expected_goals": {"home": round(home_xg, 2), "away": round(away_xg, 2)},
@@ -138,7 +228,10 @@ def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> D
         "btts": preds["btts"],
         "over_under": preds["over_under"],
         "correct_score_top5": preds["correct_score"],
-        "score_matrix": preds["correct_score"],  # Matriz completa para Resultado Correcto
+        "score_matrix": preds["correct_score"],
         "halftime": ht_preds,
-        "handicaps": handicaps
+        "handicaps": handicaps,
+        "corners": corners_preds,
+        "cards": cards_preds
     }
+

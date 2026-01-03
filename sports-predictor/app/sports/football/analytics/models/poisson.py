@@ -41,9 +41,20 @@ class PoissonEngine:
     """
     
     @staticmethod
+    def get_probability(lambda_val: float, k: int) -> float:
+        """Calcula la probabilidad de exactamente k eventos."""
+        return poisson_probability(lambda_val, k)
+    
+    @staticmethod
+    def get_cumulative_probability(lambda_val: float, k: int) -> float:
+        """Calcula P(X <= k), la probabilidad acumulada hasta k eventos."""
+        return sum(poisson_probability(lambda_val, i) for i in range(k + 1))
+    
+    @staticmethod
     def get_joint_probability(home_xg: float, home_goals: int, away_xg: float, away_goals: int, rho: float = 0.1) -> float:
         """Calcula la probabilidad conjunta de un marcador específico con ajuste Dixon-Coles."""
         prob_home = poisson_probability(home_xg, home_goals)
         prob_away = poisson_probability(away_xg, away_goals)
         tau = calculate_dixon_coles_tau(home_goals, away_goals, home_xg, away_xg, rho)
         return prob_home * prob_away * tau
+

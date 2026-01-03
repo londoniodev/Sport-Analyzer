@@ -70,10 +70,44 @@ def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: 
         elif "ambos equipos" in label_lower or "btts" in label_lower:
             data_btts = analysis_data.get("btts", {})
             probs = {"Sí": data_btts.get("yes"), "Yes": data_btts.get("yes"), "No": data_btts.get("no")}
-        elif "doble oportunidad" in label_lower:
+        elif "doble oportunidad" in label_lower and "parte" not in label_lower:
             data_1x2 = analysis_data.get("1x2", {})
             h, d, a = data_1x2.get("home_win", 0), data_1x2.get("draw", 0), data_1x2.get("away_win", 0)
             probs = {"1X": h + d, "12": h + a, "X2": d + a}
+        elif "sin empate" in label_lower or "draw no bet" in label_lower:
+            # Draw No Bet (determinar si es 1ª parte o tiempo completo)
+            if "parte" in label_lower or "mitad" in label_lower:
+                data_1x2 = analysis_data.get("halftime", {}).get("1x2", {})
+                h, a = data_1x2.get("home", 0), data_1x2.get("away", 0)
+            else:
+                data_1x2 = analysis_data.get("1x2", {})
+                h, a = data_1x2.get("home_win", 0), data_1x2.get("away_win", 0)
+            total = h + a
+            if total > 0:
+                probs = {"1": h / total, "2": a / total}
+        elif "descanso" in label_lower and "/" not in label_lower:
+            # 1X2 Medio Tiempo (sin HT/FT)
+            ht_data = analysis_data.get("halftime", {}).get("1x2", {})
+            probs = {"1": ht_data.get("home"), "X": ht_data.get("draw"), "2": ht_data.get("away")}
+        elif "gol en ambas mitades" in label_lower:
+            # Probabilidad de gol en ambas mitades usando datos de halftime
+            ht_ou = analysis_data.get("halftime", {}).get("over_under", {})
+            if "0.5" in ht_ou:
+                # Aproximación: P(gol 1ª) * P(gol 2ª)
+                prob_goal_ht = ht_ou.get("0.5", {}).get("over", 0.5)
+                # Asumimos similar para 2ª mitad
+                prob_both = prob_goal_ht * prob_goal_ht * 1.2  # Factor correlación
+                probs = {"Sí": min(prob_both, 0.95), "Yes": min(prob_both, 0.95), "No": max(1 - prob_both, 0.05)}
+        elif ("mayor" in label_lower or "más" in label_lower) and ("esquina" in label_lower or "corner" in label_lower):
+            # Mayor número de corners: 1X2
+            corners_winner = analysis_data.get("corners", {}).get("winner", {})
+            if corners_winner:
+                probs = {"1": corners_winner.get("home"), "X": corners_winner.get("draw"), "2": corners_winner.get("away")}
+        elif ("mayor" in label_lower or "más" in label_lower) and "tarjeta" in label_lower:
+            # Mayor número de tarjetas: 1X2
+            cards_winner = analysis_data.get("cards", {}).get("winner", {})
+            if cards_winner:
+                probs = {"1": cards_winner.get("home"), "X": cards_winner.get("draw"), "2": cards_winner.get("away")}
     
     n_cols = min(len(sorted_outcomes), 4)
     if n_cols == 0: n_cols = 1
@@ -119,8 +153,15 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
         
         # Detectar tipo de mercado
         label_lower = label.lower()
-        is_total_goals = "total de goles" in label_lower and "equipo" not in label_lower
+        # Total de goles del PARTIDO (no de un equipo, no de una mitad específica de equipo)
+        is_specific_team = " de " in label_lower and ("mitad" in label_lower or "parte" in label_lower)
+        is_total_goals = ("total de goles" in label_lower 
+                          and "equipo" not in label_lower 
+                          and not is_specific_team)
         is_handicap = "hándicap" in label_lower or "handicap" in label_lower or "asiático" in label_lower
+        # Corners y tarjetas (solo mercados totales del partido)
+        is_total_corners = ("esquina" in label_lower or "corner" in label_lower) and "total" in label_lower and not is_specific_team
+        is_total_cards = ("tarjeta" in label_lower) and "total" in label_lower and not is_specific_team
         
         for out in outcomes:
             raw_line = out.get("line")
@@ -190,6 +231,26 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
                     prob_val = h_data.get("push", 0)
                 prob_col_name = f"Prob. % ({display_label})"
                 lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+            
+            # Corners (Total de Esquinas)
+            corners_data = analysis_data.get("corners", {}) if analysis_data else {}
+            if is_total_corners and corners_data:
+                corners_ou = corners_data.get("over_under", {})
+                if str(line_sort_key) in corners_ou:
+                    c_data = corners_ou[str(line_sort_key)]
+                    prob_val = c_data["over"] if out_label == "Over" else c_data["under"]
+                    prob_col_name = f"Prob. % ({display_label})"
+                    lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+            
+            # Tarjetas (Total de Tarjetas)
+            cards_data = analysis_data.get("cards", {}) if analysis_data else {}
+            if is_total_cards and cards_data:
+                cards_ou = cards_data.get("over_under", {})
+                if str(line_sort_key) in cards_ou:
+                    t_data = cards_ou[str(line_sort_key)]
+                    prob_val = t_data["over"] if out_label == "Over" else t_data["under"]
+                    prob_col_name = f"Prob. % ({display_label})"
+                    lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
 
         rows = [lines_data[k] for k in sorted(lines_data.keys())]
         
@@ -291,6 +352,30 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
                          score_key = f"{home_goals}-{away_goals}"
                          if score_key in score_matrix:
                              row["Prob. %"] = round(score_matrix[score_key] * 100, 1)
+                     except:
+                         pass
+                 
+                 # HT/FT: calcular probabilidad combinando medio tiempo y final
+                 if is_half_time_full_time and analysis_data and "/" in lbl:
+                     try:
+                         ht_data = analysis_data.get("halftime", {}).get("1x2", {})
+                         ft_data = analysis_data.get("1x2", {})
+                         
+                         parts = lbl.split("/")
+                         ht_result = parts[0].strip()
+                         ft_result = parts[1].strip()
+                         
+                         # Mapear 1, X, 2 a probabilidades
+                         ht_map = {"1": ht_data.get("home", 0), "X": ht_data.get("draw", 0), "2": ht_data.get("away", 0)}
+                         ft_map = {"1": ft_data.get("home_win", 0), "X": ft_data.get("draw", 0), "2": ft_data.get("away_win", 0)}
+                         
+                         ht_prob = ht_map.get(ht_result, 0)
+                         ft_prob = ft_map.get(ft_result, 0)
+                         
+                         # Probabilidad aproximada (independencia asumida, ajuste conservador)
+                         combined_prob = ht_prob * ft_prob * 1.5  # Factor de correlación
+                         if combined_prob > 0:
+                             row["Prob. %"] = round(min(combined_prob * 100, 99.9), 1)
                      except:
                          pass
                  
