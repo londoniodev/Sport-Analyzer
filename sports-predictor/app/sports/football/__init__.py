@@ -15,6 +15,7 @@ from app.sports.football.analytics import FootballAnalytics
 from app.sports.football.ui.dashboard import show_dashboard
 from app.sports.football.ui.prediction_view import show_prediction_view
 from app.sports.football.ui.rushbet_view import show_rushbet_view
+from app.sports.football.ui.player_browser import show_player_browser
 
 # Register this sport
 register_sport(SportConfig(
@@ -30,5 +31,6 @@ register_sport(SportConfig(
         "dashboard": show_dashboard,
         "prediction": show_prediction_view,
         "live_odds": show_rushbet_view,
+        "players": show_player_browser,
     }
 ))
