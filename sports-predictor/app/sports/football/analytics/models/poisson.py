@@ -57,4 +57,26 @@ class PoissonEngine:
         prob_away = poisson_probability(away_xg, away_goals)
         tau = calculate_dixon_coles_tau(home_goals, away_goals, home_xg, away_xg, rho)
         return prob_home * prob_away * tau
+    
+    @staticmethod
+    def get_over_under_probabilities(lambda_val: float, thresholds: List[float]) -> Dict[str, Dict[str, float]]:
+        """
+        Calcula probabilidades de Over/Under para una lista de umbrales.
+        Returns:
+            Dict[str, Dict[str, float]]: {"2.5": {"over": 0.6, "under": 0.4}, ...}
+        """
+        results = {}
+        for t in thresholds:
+            # P(X <= k) where k = floor(t)
+            under_prob = sum(poisson_probability(lambda_val, k) for k in range(int(t) + 1))
+            
+            # Clamp probabilities
+            under_prob = max(0.0, min(1.0, under_prob))
+            over_prob = 1.0 - under_prob
+            
+            results[str(t)] = {
+                "over": round(over_prob, 4),
+                "under": round(under_prob, 4)
+            }
+        return results
 

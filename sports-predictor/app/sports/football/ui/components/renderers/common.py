@@ -32,10 +32,12 @@ PREMIUM_MARKET_PATTERNS = [
     "total de goles - 2.ª parte",
     "2.ª parte",  # 1X2 2nd Half
     "2ª parte",
+    "2.ª mitad",
+    "2ª mitad",
     "apuesta sin empate - 2",
     "doble oportunidad - 2",
     "ambos equipos marcarán - 2",
-    "total de goles de por parte de - 2",
+    "total de goles de por parte de - 2", # Caso específico Rushbet
 ]
 
 
@@ -218,15 +220,22 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
         
         # Detectar tipo de mercado
         label_lower = label.lower()
-        # Total de goles del PARTIDO (no de un equipo, no de una mitad específica de equipo)
-        is_specific_team = " de " in label_lower and ("mitad" in label_lower or "parte" in label_lower)
+        
+        # Mejor detección de equipo específico
+        has_team_name = (home_team and home_team.lower() in label_lower) or (away_team and away_team.lower() in label_lower)
+        is_specific_team = has_team_name or (" de " in label_lower and ("mitad" in label_lower or "parte" in label_lower))
+
+        # Excluir explícitamente 2a mitad
+        is_second_half = "2ª" in label_lower or "2.ª" in label_lower or "segunda" in label_lower
+
         is_halftime_goals = ("total de goles" in label_lower 
                              and ("1ª parte" in label_lower or "1.ª parte" in label_lower or "medio tiempo" in label_lower)
                              and not is_specific_team)
         is_total_goals = ("total de goles" in label_lower 
                           and "equipo" not in label_lower 
                           and not is_specific_team
-                          and not is_halftime_goals)
+                          and not is_halftime_goals
+                          and not is_second_half)
         is_handicap = "hándicap" in label_lower or "handicap" in label_lower or "asiático" in label_lower
         # Corners y tarjetas (solo mercados totales del partido)
         is_total_corners = ("esquina" in label_lower or "corner" in label_lower) and "total" in label_lower and not is_specific_team
@@ -293,6 +302,24 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
                 ht_ou = analysis_data.get("halftime", {}).get("over_under", {}) if analysis_data else {}
                 if str(line_sort_key) in ht_ou:
                     p_data = ht_ou[str(line_sort_key)]
+                    prob_val = p_data["over"] if out_label == "Over" else p_data["under"]
+                    prob_col_name = f"Prob. % ({display_label})"
+                    lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+
+            # Goles por equipo (1ª Parte)
+            if is_specific_team and ("1" in label_lower or "primer" in label_lower):
+                ht_data = analysis_data.get("halftime", {}) if analysis_data else {}
+                is_home = home_team and home_team.lower() in label_lower
+                is_away = away_team and away_team.lower() in label_lower
+                
+                target_ou = None
+                if is_home:
+                    target_ou = ht_data.get("over_under_home")
+                elif is_away:
+                    target_ou = ht_data.get("over_under_away")
+                
+                if target_ou and str(line_sort_key) in target_ou:
+                    p_data = target_ou[str(line_sort_key)]
                     prob_val = p_data["over"] if out_label == "Over" else p_data["under"]
                     prob_col_name = f"Prob. % ({display_label})"
                     lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
