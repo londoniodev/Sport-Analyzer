@@ -69,79 +69,87 @@ def show_match_detail_view():
     home_team = details.get("home_team", event_basic.get("home_team", "Local"))
     away_team = details.get("away_team", event_basic.get("away_team", "Visitante"))
     
-    # --- ID RESOLUTION STRATEGY (FAIL-SAFE) ---
-    # Prioridad 1: Mapeo Manual (Garantiza ID correcto de API-Football)
-    mapped_home_id = get_mapped_team_id(home_team)
-    mapped_away_id = get_mapped_team_id(away_team)
+    # --- SESIÓN COMPARTIDA PARA TODAS LAS OPERACIONES DE BD ---
+    from app.core.database import get_session
+    from sqlmodel import select
+    from app.sports.football.models import Fixture
     
-    # Scraper IDs (Internal Kambi IDs - a menudo incompatibles con API-Football)
-    scraper_home_id = details.get("home_id")
-    scraper_away_id = details.get("away_id")
+    db_session = next(get_session())
     
-    # Asignación final con preferencia al Mapa
-    home_id = mapped_home_id if mapped_home_id else scraper_home_id
-    away_id = mapped_away_id if mapped_away_id else scraper_away_id
-    
-    # Debug info para el usuario si hay discrepancia
-    if mapped_home_id and scraper_home_id and mapped_home_id != scraper_home_id:
-        # Esto confirma que el mapa corrigió el ID
-        pass 
-    markets_raw = details.get("markets", {})
-    
-    # --- FILA DE BOTONES DE ACCIÓN ---
-    col_v, col_d, col_a = st.columns([1, 2, 2])
-    with col_v:
-        if st.button("Volver", icon=":material/arrow_back:"):
-            st.session_state.rushbet_view = "list"
-            st.session_state.selected_event_id = None
-            st.rerun()
-            
-    with col_d:
-        if home_id and away_id:
-            if st.button("📥 Descargar Historial (Ult. 20)", help=f"Sincroniza los últimos 20 partidos de {home_team} y {away_team} desde API-Football"):
-                with st.status("Sincronizando historial de equipos...", expanded=True) as status:
-                    etl = FootballETL()
-                    
-                    st.write(f"⏳ Sincronizando **{home_team}**...")
-                    h_count = etl.sync_team_history(home_id, 20)
-                    st.write(f"✅ {h_count} partidos procesados.")
-                    
-                    st.write(f"⏳ Sincronizando **{away_team}**...")
-                    a_count = etl.sync_team_history(away_id, 20)
-                    st.write(f"✅ {a_count} partidos procesados.")
-                    
-                    status.update(label="¡Historial Sincronizado!", state="complete", expanded=False)
-                st.success(f"Sincronización finalizada: {h_count + a_count} partidos totales en base de datos.")
-        else:
-            st.error("⚠️ No se detectaron IDs de equipos. El botón de descarga está deshabilitado.")
-            with st.expander("Ver IDs Detectados (Debug)"):
-                st.write(f"**Home:** {home_team} | ID: `{home_id}` {'(Mapeado)' if mapped_home_id else '(Scraper)'}")
-                st.write(f"**Away:** {away_team} | ID: `{away_id}` {'(Mapeado)' if mapped_away_id else '(Scraper)'}")
-
-    with col_a:
-        do_analysis = st.toggle("📈 Mostrar Análisis Dinámico", 
-                                help="Calcula probabilidades en tiempo real usando el modelo Poisson Ajustado (Dixon-Coles + EWMA). Requiere haber descargado el historial.")
-
-    # --- CÁLCULO DE PREDICCIONES (Si aplica) ---
-    predictions = None
-    if do_analysis and home_id and away_id:
-        from app.sports.football.analytics import get_full_match_prediction
-        from app.core.database import get_session
+    try:
+        # --- ID RESOLUTION STRATEGY (FAIL-SAFE) ---
+        # Prioridad 1: Auto-match con fuzzy logic (usa BD)
+        mapped_home_id = get_mapped_team_id(home_team, db_session)
+        mapped_away_id = get_mapped_team_id(away_team, db_session)
         
-        with next(get_session()) as session:
-            # Verificar si hay datos
+        # Scraper IDs (Internal Kambi IDs - a menudo incompatibles con API-Football)
+        scraper_home_id = details.get("home_id")
+        scraper_away_id = details.get("away_id")
+        
+        # Asignación final con preferencia al Mapa
+        home_id = mapped_home_id if mapped_home_id else scraper_home_id
+        away_id = mapped_away_id if mapped_away_id else scraper_away_id
+        
+        # Commit any new mappings created by get_mapped_team_id
+        db_session.commit()
+        
+        markets_raw = details.get("markets", {})
+        
+        # --- FILA DE BOTONES DE ACCIÓN ---
+        col_v, col_d, col_a = st.columns([1, 2, 2])
+        with col_v:
+            if st.button("Volver", icon=":material/arrow_back:"):
+                st.session_state.rushbet_view = "list"
+                st.session_state.selected_event_id = None
+                st.rerun()
+                
+        with col_d:
+            if home_id and away_id:
+                if st.button("📥 Descargar Historial (Ult. 20)", help=f"Sincroniza los últimos 20 partidos de {home_team} y {away_team} desde API-Football"):
+                    with st.status("Sincronizando historial de equipos...", expanded=True) as status:
+                        etl = FootballETL()
+                        
+                        st.write(f"⏳ Sincronizando **{home_team}**...")
+                        h_count = etl.sync_team_history(home_id, 20)
+                        st.write(f"✅ {h_count} partidos procesados.")
+                        
+                        st.write(f"⏳ Sincronizando **{away_team}**...")
+                        a_count = etl.sync_team_history(away_id, 20)
+                        st.write(f"✅ {a_count} partidos procesados.")
+                        
+                        status.update(label="¡Historial Sincronizado!", state="complete", expanded=False)
+                    st.success(f"Sincronización finalizada: {h_count + a_count} partidos totales en base de datos.")
+            else:
+                st.error("⚠️ No se detectaron IDs de equipos. El botón de descarga está deshabilitado.")
+                with st.expander("Ver IDs Detectados (Debug)"):
+                    st.write(f"**Home:** {home_team} | ID: `{home_id}` {'(Mapeado)' if mapped_home_id else '(Scraper)'}")
+                    st.write(f"**Away:** {away_team} | ID: `{away_id}` {'(Mapeado)' if mapped_away_id else '(Scraper)'}")
+
+        with col_a:
+            do_analysis = st.toggle("📈 Mostrar Análisis Dinámico", 
+                                    help="Calcula probabilidades en tiempo real usando el modelo Poisson Ajustado (Dixon-Coles + EWMA). Requiere haber descargado el historial.")
+
+        # --- CÁLCULO DE PREDICCIONES (Si aplica) - REUTILIZA SESIÓN ---
+        predictions = None
+        if do_analysis and home_id and away_id:
+            from app.sports.football.analytics import get_full_match_prediction
+            
+            # Verificar si hay datos (usando la misma sesión)
             check_stmt = (
                 select(Fixture)
                 .where((Fixture.home_team_id == home_id) | (Fixture.away_team_id == home_id))
                 .limit(5)
             )
-            has_data = session.exec(check_stmt).first()
+            has_data = db_session.exec(check_stmt).first()
             
             if has_data:
-                predictions = get_full_match_prediction(home_id, away_id, session)
+                predictions = get_full_match_prediction(home_id, away_id, db_session)
             else:
                 st.sidebar.warning("⚠️ No hay datos históricos para este equipo. Usa el botón 'Descargar Historial' para habilitar el análisis.")
                 do_analysis = False
+    
+    finally:
+        db_session.close()
 
     # --- PROCESAMIENTO Y LIMPIEZA DE MERCADOS ---
     markets = _redistribute_markets(markets_raw)

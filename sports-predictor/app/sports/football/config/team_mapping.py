@@ -1,82 +1,255 @@
 """
-Team Name Mapping Configuration.
+Sistema de Auto-Matching de Equipos.
 
-Este módulo centraliza la traducción de nombres de equipos entre distintas fuentes 
-(e.g., Rushbet/Kambi) y el estándar de API-Football.
+Este módulo resuelve nombres de equipos de Rushbet a IDs de API-Football
+usando fuzzy matching y persistencia en base de datos.
 """
+import logging
+from typing import Optional
+from datetime import datetime
+from sqlmodel import Session, select
 
-# Mapeo Principal: { "Nombre Rushbet": (API_ID, "Nombre API-Football") }
-TEAM_NAME_MAP = {
-    # --- ESPAÑA (La Liga) ---
-    "Athletic Club": (531, "Athletic Club"),
-    "Atlético de Madrid": (530, "Atletico Madrid"),
-    "Atlético Madrid": (530, "Atletico Madrid"),
-    "FC Barcelona": (529, "Barcelona"),
-    "Barcelona": (529, "Barcelona"),
-    "Real Betis": (543, "Real Betis"),
-    "Celta de Vigo": (538, "Celta Vigo"),
-    "RC Celta": (538, "Celta Vigo"),
-    "RCD Espanyol": (740, "Espanyol"),
-    "Espanyol": (740, "Espanyol"),
-    "Getafe CF": (546, "Getafe"),
-    "Getafe": (546, "Getafe"),
-    "Girona FC": (547, "Girona"),
-    "Girona": (547, "Girona"),
-    "UD Las Palmas": (724, "Las Palmas"),
-    "Las Palmas": (724, "Las Palmas"),
-    "CD Leganés": (723, "Leganes"),
-    "Leganés": (723, "Leganes"),
-    "RCD Mallorca": (798, "Mallorca"),
-    "Mallorca": (798, "Mallorca"),
-    "CA Osasuna": (727, "Osasuna"),
-    "Osasuna": (727, "Osasuna"),
-    "Rayo Vallecano": (728, "Rayo Vallecano"),
-    "Real Madrid": (541, "Real Madrid"),
-    "Real Sociedad": (548, "Real Sociedad"),
-    "Sevilla FC": (536, "Sevilla"),
-    "Sevilla": (536, "Sevilla"),
-    "Valencia CF": (532, "Valencia"),
-    "Valencia": (532, "Valencia"),
-    "Real Valladolid": (720, "Valladolid"),
-    "Valladolid": (720, "Valladolid"),
-    "Villarreal CF": (533, "Villarreal"),
-    "Villarreal": (533, "Villarreal"),
-    "Alavés": (712, "Alaves"),
-    "Deportivo Alavés": (712, "Alaves"),
-    
-    # --- INGLATERRA (Premier League) ---
-    "Man City": (50, "Manchester City"),
-    "Manchester City": (50, "Manchester City"),
-    "Man Utd": (33, "Manchester United"),
-    "Manchester United": (33, "Manchester United"),
-    "Arsenal": (42, "Arsenal"),
-    "Liverpool": (40, "Liverpool"),
-    "Chelsea": (49, "Chelsea"),
-    "Tottenham": (47, "Tottenham"),
-    "Tottenham Hotspur": (47, "Tottenham"),
-    "Newcastle": (34, "Newcastle"),
-    "Aston Villa": (66, "Aston Villa"),
-    "West Ham": (48, "West Ham"),
-}
+try:
+    from rapidfuzz import fuzz, process
+    RAPIDFUZZ_AVAILABLE = True
+except ImportError:
+    RAPIDFUZZ_AVAILABLE = False
+    logging.warning("rapidfuzz no instalado. Fuzzy matching limitado.")
 
-def get_mapped_team_id(rushbet_name: str) -> int:
-    """Retorna el ID de API-Football dado el nombre de Rushbet."""
-    # 1. Normalización básica (strip)
-    clean_name = rushbet_name.strip()
+from app.sports.football.models import Team, TeamMapping
+
+logger = logging.getLogger(__name__)
+
+# Umbrales de confianza
+CONFIDENCE_AUTO_MATCH = 0.85  # >= 85% confianza: auto-guardar como verificado
+CONFIDENCE_TENTATIVE = 0.60   # >= 60% confianza: guardar pero no verificado
+CONFIDENCE_REJECT = 0.50      # < 50% confianza: no guardar
+
+
+def get_mapped_team_id(source_name: str, session: Optional[Session] = None) -> Optional[int]:
+    """
+    Busca el ID de API-Football para un nombre de equipo externo.
     
-    # 2. Búsqueda directa
-    if clean_name in TEAM_NAME_MAP:
-        return TEAM_NAME_MAP[clean_name][0]
+    1. Primero busca en la tabla de mapeos existentes
+    2. Si no existe, intenta auto-match con fuzzy logic
+    3. Guarda el resultado para futuras consultas
+    
+    Args:
+        source_name: Nombre del equipo como aparece en Rushbet
+        session: Sesión de BD opcional
         
-    # 3. Búsqueda case-insensitive
-    for key, (tid, _) in TEAM_NAME_MAP.items():
-        if key.lower() == clean_name.lower():
-            return tid
+    Returns:
+        ID del equipo o None si no se encuentra
+    """
+    if not source_name:
+        return None
+    
+    clean_name = source_name.strip()
+    
+    # Crear sesión si no se provee
+    if session is None:
+        from app.core.database import get_session
+        session = next(get_session())
+        should_close = True
+    else:
+        should_close = False
+    
+    try:
+        # 1. Buscar en mapeos existentes
+        existing = session.exec(
+            select(TeamMapping).where(TeamMapping.source_name == clean_name)
+        ).first()
+        
+        if existing and existing.api_football_id:
+            return existing.api_football_id
+        
+        # 2. Intentar auto-match
+        match_result = _auto_match_team(clean_name, session)
+        
+        if match_result:
+            team_id, confidence = match_result
             
+            # 3. Guardar el mapeo
+            _save_mapping(clean_name, team_id, confidence, session)
+            session.commit()
+            
+            return team_id
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error en get_mapped_team_id: {e}")
+        return None
+    finally:
+        if should_close:
+            session.close()
+
+
+def _auto_match_team(source_name: str, session: Session) -> Optional[tuple[int, float]]:
+    """
+    Intenta encontrar automáticamente el equipo más similar.
+    
+    Returns:
+        Tuple (team_id, confidence_score) o None
+    """
+    # Obtener todos los equipos de la BD
+    all_teams = session.exec(select(Team)).all()
+    if not all_teams:
+        return None
+    
+    # Preparar lista de nombres para comparar
+    team_names = [(t.id, t.name) for t in all_teams]
+    
+    if RAPIDFUZZ_AVAILABLE:
+        # Usar rapidfuzz para matching avanzado
+        return _fuzzy_match_rapidfuzz(source_name, team_names)
+    else:
+        # Fallback a matching simple
+        return _fuzzy_match_simple(source_name, team_names)
+
+
+def _fuzzy_match_rapidfuzz(source_name: str, team_names: list[tuple[int, str]]) -> Optional[tuple[int, float]]:
+    """Matching usando rapidfuzz (más preciso)."""
+    choices = {name: team_id for team_id, name in team_names}
+    
+    # Usar múltiples métodos y promediar
+    results = []
+    
+    # 1. Token Sort Ratio (bueno para orden diferente de palabras)
+    match1 = process.extractOne(
+        source_name, 
+        choices.keys(),
+        scorer=fuzz.token_sort_ratio
+    )
+    if match1:
+        results.append((choices[match1[0]], match1[1] / 100))
+    
+    # 2. Partial Ratio (bueno para substrings)
+    match2 = process.extractOne(
+        source_name,
+        choices.keys(),
+        scorer=fuzz.partial_ratio
+    )
+    if match2:
+        results.append((choices[match2[0]], match2[1] / 100))
+    
+    # 3. Weighted Ratio (balance general)
+    match3 = process.extractOne(
+        source_name,
+        choices.keys(),
+        scorer=fuzz.WRatio
+    )
+    if match3:
+        results.append((choices[match3[0]], match3[1] / 100))
+    
+    if not results:
+        return None
+    
+    # Tomar el mejor resultado
+    best = max(results, key=lambda x: x[1])
+    
+    if best[1] >= CONFIDENCE_REJECT:
+        logger.info(f"Auto-match: '{source_name}' -> ID {best[0]} (confianza: {best[1]:.2%})")
+        return best
+    
     return None
 
-def get_mapped_team_name(rushbet_name: str) -> str:
-    """Retorna el nombre estándar de API-Football."""
-    if rushbet_name in TEAM_NAME_MAP:
-        return TEAM_NAME_MAP[rushbet_name][1]
-    return rushbet_name
+
+def _fuzzy_match_simple(source_name: str, team_names: list[tuple[int, str]]) -> Optional[tuple[int, float]]:
+    """Matching simple sin dependencias externas."""
+    source_lower = source_name.lower()
+    
+    best_match = None
+    best_score = 0.0
+    
+    for team_id, team_name in team_names:
+        name_lower = team_name.lower()
+        
+        # Coincidencia exacta
+        if source_lower == name_lower:
+            return (team_id, 1.0)
+        
+        # Substring match
+        if source_lower in name_lower or name_lower in source_lower:
+            # Calcular "score" basado en longitud
+            score = len(min(source_lower, name_lower, key=len)) / len(max(source_lower, name_lower, key=len))
+            if score > best_score:
+                best_score = score
+                best_match = team_id
+        
+        # Word overlap
+        source_words = set(source_lower.split())
+        name_words = set(name_lower.split())
+        overlap = len(source_words & name_words)
+        if overlap > 0:
+            score = overlap / max(len(source_words), len(name_words))
+            if score > best_score:
+                best_score = score
+                best_match = team_id
+    
+    if best_match and best_score >= CONFIDENCE_REJECT:
+        return (best_match, best_score)
+    
+    return None
+
+
+def _save_mapping(source_name: str, team_id: int, confidence: float, session: Session) -> None:
+    """Guarda o actualiza un mapeo en la base de datos."""
+    existing = session.exec(
+        select(TeamMapping).where(TeamMapping.source_name == source_name)
+    ).first()
+    
+    if existing:
+        existing.api_football_id = team_id
+        existing.confidence_score = confidence
+        existing.verified = confidence >= CONFIDENCE_AUTO_MATCH
+        existing.updated_at = datetime.utcnow()
+        session.add(existing)
+    else:
+        mapping = TeamMapping(
+            source_name=source_name,
+            source="rushbet",
+            api_football_id=team_id,
+            confidence_score=confidence,
+            verified=confidence >= CONFIDENCE_AUTO_MATCH
+        )
+        session.add(mapping)
+    
+    logger.info(f"Mapeo guardado: '{source_name}' -> {team_id} (conf: {confidence:.2%}, verified: {confidence >= CONFIDENCE_AUTO_MATCH})")
+
+
+def verify_mapping(source_name: str, correct_team_id: int, session: Session) -> bool:
+    """
+    Verificación manual de un mapeo.
+    Permite corregir errores del auto-match.
+    """
+    existing = session.exec(
+        select(TeamMapping).where(TeamMapping.source_name == source_name)
+    ).first()
+    
+    if existing:
+        existing.api_football_id = correct_team_id
+        existing.confidence_score = 1.0
+        existing.verified = True
+        existing.updated_at = datetime.utcnow()
+    else:
+        existing = TeamMapping(
+            source_name=source_name,
+            source="rushbet",
+            api_football_id=correct_team_id,
+            confidence_score=1.0,
+            verified=True
+        )
+    
+    session.add(existing)
+    session.commit()
+    
+    logger.info(f"Mapeo verificado manualmente: '{source_name}' -> {correct_team_id}")
+    return True
+
+
+def get_unverified_mappings(session: Session) -> list[TeamMapping]:
+    """Obtiene mapeos pendientes de verificación manual."""
+    return session.exec(
+        select(TeamMapping).where(TeamMapping.verified == False)
+    ).all()

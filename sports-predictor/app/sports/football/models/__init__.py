@@ -162,3 +162,32 @@ class Injury(SQLModel, table=True):
     player: Optional["Player"] = Relationship()
     team: Optional["Team"] = Relationship()
     league: Optional["League"] = Relationship()
+
+
+class TeamMapping(SQLModel, table=True):
+    """
+    Mapeo de nombres de equipos de fuentes externas (Rushbet) a IDs de API-Football.
+    Permite auto-matching con fuzzy logic y verificación manual.
+    """
+    __tablename__ = "football_team_mapping"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_name: str = Field(unique=True, index=True)  # Nombre original (ej. "Man Utd")
+    source: str = Field(default="rushbet")  # Fuente: 'rushbet', 'betplay', etc.
+    api_football_id: Optional[int] = Field(default=None, foreign_key="football_team.id")
+    confidence_score: float = Field(default=0.0)  # 0.0 - 1.0
+    verified: bool = Field(default=False)  # Confirmado manualmente?
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationship
+    team: Optional["Team"] = Relationship()
+
+
+class Referee(SQLModel, table=True):
+    """Football referee."""
+    __tablename__ = "football_referee"
+    
+    id: int = Field(primary_key=True)
+    name: str
+
