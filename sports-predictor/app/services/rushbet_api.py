@@ -360,9 +360,9 @@ class RushbetClient:
             # --- Handicap 3-Way ---
             (["3-way", "3 way", "3 opciones"], "handicap_3way"),
             
-            # --- Faltas (equipo y jugador) ---
-            (["faltas cometidas por", "número total de faltas cometidas por"], "faltas_equipo"),
+            # --- Faltas (JUGADOR primero - más específico) ---
             (["faltas cometidas por el jugador"], "apuestas_especiales_jugador"),
+            (["faltas cometidas por", "número total de faltas cometidas por"], "faltas_equipo"),
             
             # --- Fueras de juego ---
             (["fuera de juego", "fueras de juego"], "eventos_partido"),
