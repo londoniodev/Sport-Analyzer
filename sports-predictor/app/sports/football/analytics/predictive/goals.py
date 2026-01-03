@@ -81,6 +81,7 @@ def predict_halftime_markets(home_xg: float, away_xg: float, rho: float = 0.1) -
     
     return {
         "1x2": preds["1x2"],
+        "btts": preds["btts"],
         "over_under": {
             "0.5": preds["over_under"]["0.5"],
             "1.5": preds["over_under"]["1.5"]
@@ -151,9 +152,27 @@ def predict_corners_markets(home_corners_avg: float, away_corners_avg: float) ->
             else:
                 draw_prob += joint
     
+    # Over/Under por equipo
+    ou_home = {}
+    ou_away = {}
+    for t in thresholds_total:
+         # Ajustar threshold para equipo (aprox mitad del total o rangos típicos de equipo)
+         # Usaremos rangos fijos típicos para equipos: 1.5 a 8.5
+         pass
+
+    team_thresholds = [2.5, 3.5, 4.5, 5.5, 6.5, 7.5]
+    for t in team_thresholds:
+        p_home = 1 - PoissonEngine.get_cumulative_probability(home_corners_avg, int(t))
+        ou_home[str(t)] = {"over": round(p_home, 4), "under": round(1 - p_home, 4)}
+        
+        p_away = 1 - PoissonEngine.get_cumulative_probability(away_corners_avg, int(t))
+        ou_away[str(t)] = {"over": round(p_away, 4), "under": round(1 - p_away, 4)}
+
     return {
         "expected": {"home": round(home_corners_avg, 2), "away": round(away_corners_avg, 2), "total": round(total_expected, 2)},
         "over_under": over_under,
+        "over_under_home": ou_home,
+        "over_under_away": ou_away,
         "winner": {"home": round(home_prob, 4), "draw": round(draw_prob, 4), "away": round(away_prob, 4)}
     }
 
@@ -187,9 +206,22 @@ def predict_cards_markets(home_cards_avg: float, away_cards_avg: float) -> Dict:
             else:
                 draw_prob += joint
     
+    # Over/Under por equipo
+    ou_home = {}
+    ou_away = {}
+    team_thresholds = [0.5, 1.5, 2.5, 3.5, 4.5]
+    for t in team_thresholds:
+        p_home = 1 - PoissonEngine.get_cumulative_probability(home_cards_avg, int(t))
+        ou_home[str(t)] = {"over": round(p_home, 4), "under": round(1 - p_home, 4)}
+        
+        p_away = 1 - PoissonEngine.get_cumulative_probability(away_cards_avg, int(t))
+        ou_away[str(t)] = {"over": round(p_away, 4), "under": round(1 - p_away, 4)}
+
     return {
         "expected": {"home": round(home_cards_avg, 2), "away": round(away_cards_avg, 2), "total": round(total_expected, 2)},
         "over_under": over_under,
+        "over_under_home": ou_home,
+        "over_under_away": ou_away,
         "winner": {"home": round(home_prob, 4), "draw": round(draw_prob, 4), "away": round(away_prob, 4)}
     }
 

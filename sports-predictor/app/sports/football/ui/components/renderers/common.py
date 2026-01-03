@@ -27,6 +27,15 @@ PREMIUM_MARKET_PATTERNS = [
     "número total de disparos - 2",
     "más tiros a puerta - 1",
     "más tiros a puerta - 2",
+    # 2ª Parte / 2nd Half (No tenemos datos, solo HT y FT)
+    "total de goles - 2",
+    "total de goles - 2.ª parte",
+    "2.ª parte",  # 1X2 2nd Half
+    "2ª parte",
+    "apuesta sin empate - 2",
+    "doble oportunidad - 2",
+    "ambos equipos marcarán - 2",
+    "total de goles de por parte de - 2",
 ]
 
 
@@ -79,12 +88,12 @@ def _render_category_markets(markets: list, home_team: str, away_team: str, orde
             is_list = has_lines or len(outcomes) > 4
         
         if is_list:
-            _render_as_list(label, outcomes, label_map, analysis_data)
+            _render_as_list(label, outcomes, label_map, analysis_data, home_team, away_team)
         else:
-            _render_as_card(label, outcomes, label_map, analysis_data)
+            _render_as_card(label, outcomes, label_map, analysis_data, home_team, away_team)
 
 
-def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: dict = None):
+def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: dict = None, home_team: str = None, away_team: str = None):
     """Renderiza mercado como cards horizontales con probabilidades opcionales."""
     is_premium = _is_premium_market(label)
     st.markdown(get_section_title_html(label, coming_soon=is_premium), unsafe_allow_html=True)
@@ -104,23 +113,38 @@ def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: 
             data_1x2 = analysis_data.get("1x2", {})
             probs = {"1": data_1x2.get("home_win"), "X": data_1x2.get("draw"), "2": data_1x2.get("away_win")}
         elif "ambos equipos" in label_lower or "btts" in label_lower:
-            data_btts = analysis_data.get("btts", {})
-            probs = {"Sí": data_btts.get("yes"), "Yes": data_btts.get("yes"), "No": data_btts.get("no")}
-        elif "doble oportunidad" in label_lower and "parte" not in label_lower:
-            data_1x2 = analysis_data.get("1x2", {})
-            h, d, a = data_1x2.get("home_win", 0), data_1x2.get("draw", 0), data_1x2.get("away_win", 0)
-            probs = {"1X": h + d, "12": h + a, "X2": d + a}
+            if "1" in label_lower and ("parte" in label_lower or "mitad" in label_lower):
+                data_btts = analysis_data.get("halftime", {}).get("btts", {})
+                probs = {"Sí": data_btts.get("yes"), "Yes": data_btts.get("yes"), "No": data_btts.get("no")}
+            elif "2" in label_lower and ("parte" in label_lower or "mitad" in label_lower):
+                 probs = {} # 2a parte no disponible
+            else:
+                data_btts = analysis_data.get("btts", {})
+                probs = {"Sí": data_btts.get("yes"), "Yes": data_btts.get("yes"), "No": data_btts.get("no")}
+        elif "doble oportunidad" in label_lower:
+            if "1" in label_lower and ("parte" in label_lower or "mitad" in label_lower):
+                data_1x2 = analysis_data.get("halftime", {}).get("1x2", {})
+                h, d, a = data_1x2.get("home", 0), data_1x2.get("draw", 0), data_1x2.get("away", 0)
+                probs = {"1X": h + d, "12": h + a, "X2": d + a}
+            elif "2" in label_lower and ("parte" in label_lower or "mitad" in label_lower):
+                probs = {} # 2a parte no disponible
+            else:
+                data_1x2 = analysis_data.get("1x2", {})
+                h, d, a = data_1x2.get("home_win", 0), data_1x2.get("draw", 0), data_1x2.get("away_win", 0)
+                probs = {"1X": h + d, "12": h + a, "X2": d + a}
         elif "sin empate" in label_lower or "draw no bet" in label_lower:
-            # Draw No Bet (determinar si es 1ª parte o tiempo completo)
-            if "parte" in label_lower or "mitad" in label_lower:
+            if "1" in label_lower and ("parte" in label_lower or "mitad" in label_lower):
                 data_1x2 = analysis_data.get("halftime", {}).get("1x2", {})
                 h, a = data_1x2.get("home", 0), data_1x2.get("away", 0)
+                total = h + a
+                if total > 0: probs = {"1": h / total, "2": a / total}
+            elif "2" in label_lower and ("parte" in label_lower or "mitad" in label_lower):
+                probs = {} # 2a parte no disponible
             else:
                 data_1x2 = analysis_data.get("1x2", {})
                 h, a = data_1x2.get("home_win", 0), data_1x2.get("away_win", 0)
-            total = h + a
-            if total > 0:
-                probs = {"1": h / total, "2": a / total}
+                total = h + a
+                if total > 0: probs = {"1": h / total, "2": a / total}
         elif "descanso" in label_lower and "/" not in label_lower:
             # 1X2 Medio Tiempo (sin HT/FT)
             ht_data = analysis_data.get("halftime", {}).get("1x2", {})
@@ -177,7 +201,7 @@ def _render_as_card(label: str, outcomes: list, label_map: dict, analysis_data: 
     st.markdown("")
 
 
-def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: dict = None):
+def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: dict = None, home_team: str = None, away_team: str = None):
     """Renderiza mercado como tabla con todas las líneas."""
     has_lines = any(out.get("line") for out in outcomes)
     
@@ -196,9 +220,13 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
         label_lower = label.lower()
         # Total de goles del PARTIDO (no de un equipo, no de una mitad específica de equipo)
         is_specific_team = " de " in label_lower and ("mitad" in label_lower or "parte" in label_lower)
+        is_halftime_goals = ("total de goles" in label_lower 
+                             and ("1ª parte" in label_lower or "1.ª parte" in label_lower or "medio tiempo" in label_lower)
+                             and not is_specific_team)
         is_total_goals = ("total de goles" in label_lower 
                           and "equipo" not in label_lower 
-                          and not is_specific_team)
+                          and not is_specific_team
+                          and not is_halftime_goals)
         is_handicap = "hándicap" in label_lower or "handicap" in label_lower or "asiático" in label_lower
         # Corners y tarjetas (solo mercados totales del partido)
         is_total_corners = ("esquina" in label_lower or "corner" in label_lower) and "total" in label_lower and not is_specific_team
@@ -253,12 +281,21 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
             lines_data[line_sort_key][display_label] = odds
             
             # --- INYECCIÓN DE PROBABILIDAD (POISSON) ---
-            # Over/Under
+            # Over/Under (Partido Completo)
             if is_total_goals and str(line_sort_key) in poisson_ou:
                 p_data = poisson_ou[str(line_sort_key)]
                 prob_val = p_data["over"] if out_label == "Over" else p_data["under"]
                 prob_col_name = f"Prob. % ({display_label})"
                 lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+
+            # Over/Under (1ª Parte)
+            if is_halftime_goals:
+                ht_ou = analysis_data.get("halftime", {}).get("over_under", {}) if analysis_data else {}
+                if str(line_sort_key) in ht_ou:
+                    p_data = ht_ou[str(line_sort_key)]
+                    prob_val = p_data["over"] if out_label == "Over" else p_data["under"]
+                    prob_col_name = f"Prob. % ({display_label})"
+                    lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
             
             # Handicap Asiático
             if is_handicap and str(line_sort_key) in poisson_handicaps:
@@ -273,25 +310,65 @@ def _render_as_list(label: str, outcomes: list, label_map: dict, analysis_data: 
                 prob_col_name = f"Prob. % ({display_label})"
                 lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
             
-            # Corners (Total de Esquinas)
+            # Corners part
             corners_data = analysis_data.get("corners", {}) if analysis_data else {}
-            if is_total_corners and corners_data:
-                corners_ou = corners_data.get("over_under", {})
-                if str(line_sort_key) in corners_ou:
-                    c_data = corners_ou[str(line_sort_key)]
-                    prob_val = c_data["over"] if out_label == "Over" else c_data["under"]
-                    prob_col_name = f"Prob. % ({display_label})"
-                    lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+            if corners_data:
+                # Total Corners
+                if is_total_corners:
+                    corners_ou = corners_data.get("over_under", {})
+                    if str(line_sort_key) in corners_ou:
+                        c_data = corners_ou[str(line_sort_key)]
+                        prob_val = c_data["over"] if out_label == "Over" else c_data["under"]
+                        prob_col_name = f"Prob. % ({display_label})"
+                        lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+
+                # Team Corners
+                elif "esquina" in label_lower or "corner" in label_lower:
+                    # Detectar si es equipo local o visitante
+                    # "a favor de Lecce"
+                    is_home_corner = home_team and home_team.lower() in label_lower
+                    is_away_corner = away_team and away_team.lower() in label_lower
+                    
+                    target_ou = None
+                    if is_home_corner:
+                        target_ou = corners_data.get("over_under_home")
+                    elif is_away_corner:
+                        target_ou = corners_data.get("over_under_away")
+                        
+                    if target_ou and str(line_sort_key) in target_ou:
+                        c_data = target_ou[str(line_sort_key)]
+                        prob_val = c_data["over"] if out_label == "Over" else c_data["under"]
+                        prob_col_name = f"Prob. % ({display_label})"
+                        lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
             
-            # Tarjetas (Total de Tarjetas)
+            # Cards part
             cards_data = analysis_data.get("cards", {}) if analysis_data else {}
-            if is_total_cards and cards_data:
-                cards_ou = cards_data.get("over_under", {})
-                if str(line_sort_key) in cards_ou:
-                    t_data = cards_ou[str(line_sort_key)]
-                    prob_val = t_data["over"] if out_label == "Over" else t_data["under"]
-                    prob_col_name = f"Prob. % ({display_label})"
-                    lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+            if cards_data:
+                # Total Cards
+                if is_total_cards:
+                    cards_ou = cards_data.get("over_under", {})
+                    if str(line_sort_key) in cards_ou:
+                        t_data = cards_ou[str(line_sort_key)]
+                        prob_val = t_data["over"] if out_label == "Over" else t_data["under"]
+                        prob_col_name = f"Prob. % ({display_label})"
+                        lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
+
+                # Team Cards
+                elif "tarjeta" in label_lower:
+                    is_home_card = home_team and home_team.lower() in label_lower
+                    is_away_card = away_team and away_team.lower() in label_lower
+                    
+                    target_ou = None
+                    if is_home_card:
+                         target_ou = cards_data.get("over_under_home")
+                    elif is_away_card:
+                         target_ou = cards_data.get("over_under_away")
+                         
+                    if target_ou and str(line_sort_key) in target_ou:
+                        t_data = target_ou[str(line_sort_key)]
+                        prob_val = t_data["over"] if out_label == "Over" else t_data["under"]
+                        prob_col_name = f"Prob. % ({display_label})"
+                        lines_data[line_sort_key][prob_col_name] = round(prob_val * 100, 1)
 
         rows = [lines_data[k] for k in sorted(lines_data.keys())]
         
