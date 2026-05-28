@@ -1,0 +1,9 @@
+streamlit
+sqlmodel
+psycopg2-binary
+requests
+python-dotenv
+scipy
+pandas
+sqlalchemy
+rapidfuzz
