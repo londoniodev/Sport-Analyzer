@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select, func
 
-from app.core.database import get_session
+from app.core.database import get_session, init_db
 from app.sports.football.models import Team, Player, League, Fixture, Injury
 from app.sports.football.etl import FootballETL
 from app.services.rushbet_api import RushbetClient
@@ -35,6 +35,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def on_startup():
+    print("Initializing Database...")
+    init_db()
 
 
 # ==========================================
