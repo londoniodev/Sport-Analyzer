@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Trophy, ChevronUp, ChevronDown, Swords, Download, RefreshCw, Zap, BarChart3 } from 'lucide-react';
+import { Trophy, Swords, Download, RefreshCw, Zap, BarChart3 } from 'lucide-react';
 import { worldCupGroups } from '../lib/worldCupData';
 
 interface SyncStatus {
@@ -94,23 +94,6 @@ export default function WorldCupView() {
   
   // Group Simulation State
   const [simulatingGroupsProgress, setSimulatingGroupsProgress] = useState<{current: number, total: number, message: string} | null>(null);
-
-  const moveTeam = (groupIndex: number, teamIndex: number, direction: 'up' | 'down') => {
-    setGroups(prev => {
-      const newGroups = [...prev];
-      const group = { ...newGroups[groupIndex] };
-      const teams = [...group.teams];
-      if (direction === 'up' && teamIndex > 0) {
-        [teams[teamIndex], teams[teamIndex - 1]] = [teams[teamIndex - 1], teams[teamIndex]];
-      } else if (direction === 'down' && teamIndex < teams.length - 1) {
-        [teams[teamIndex], teams[teamIndex + 1]] = [teams[teamIndex + 1], teams[teamIndex]];
-      }
-      group.teams = teams;
-      newGroups[groupIndex] = group;
-      return newGroups;
-    });
-  };
-
   const simulateGroupStage = async () => {
     setSimulatingGroupsProgress({ current: 0, total: 72, message: 'Preparando calendarios...' });
     
@@ -503,7 +486,7 @@ export default function WorldCupView() {
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {groups.map((group, gIndex) => (
+            {groups.map((group) => (
             <Card key={group.name} className="bg-gradient-to-b from-slate-900 to-slate-950 border-slate-800 shadow-xl overflow-hidden hover:border-[#d4af37]/30 transition-colors">
               <CardHeader className="bg-slate-950/50 border-b border-slate-800/50 py-3">
                 <CardTitle className="text-lg text-center text-[#d4af37] font-bold tracking-widest uppercase">{group.name}</CardTitle>
