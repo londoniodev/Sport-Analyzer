@@ -20,7 +20,6 @@ from app.sports.football.analytics.predictive.goals import (
 )
 from app.sports.football.analytics.predictive.advanced import AdvancedPredictor
 from app.sports.football.analytics.data.team_stats import get_team_stats_summary
-from app.sports.football.config.team_mapping import get_mapped_team_id
 
 app = FastAPI(
     title="Sport Analyzer API",
@@ -294,6 +293,8 @@ def get_rushbet_event_detail(event_id: int, session: Session = Depends(get_sessi
         away_team = detail.get("away_team", "")
         scraper_home_id = detail.get("home_id")
         scraper_away_id = detail.get("away_id")
+        
+        from app.sports.football.config.team_mapping import get_mapped_team_id
         
         mapped_home_id = get_mapped_team_id(home_team, session)
         mapped_away_id = get_mapped_team_id(away_team, session)
