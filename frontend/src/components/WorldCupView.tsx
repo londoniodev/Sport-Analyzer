@@ -440,7 +440,7 @@ export default function WorldCupView() {
                               <div className="grid grid-cols-3 gap-2">
                                 <div className="bg-slate-800 p-3 rounded-lg text-center">
                                   <div className="text-xs text-slate-400 mb-1">{f.home_team_name}</div>
-                                  <div className="font-bold text-green-400">{(matchStats[f.id]?.['1x2']?.home * 100 || 0).toFixed(1)}%</div>
+                                  <div className="font-bold text-green-400">{(matchStats[f.id]?.['1x2']?.home_win * 100 || 0).toFixed(1)}%</div>
                                 </div>
                                 <div className="bg-slate-800 p-3 rounded-lg text-center border border-slate-700">
                                   <div className="text-xs text-slate-400 mb-1">Empate</div>
@@ -448,7 +448,7 @@ export default function WorldCupView() {
                                 </div>
                                 <div className="bg-slate-800 p-3 rounded-lg text-center">
                                   <div className="text-xs text-slate-400 mb-1">{f.away_team_name}</div>
-                                  <div className="font-bold text-blue-400">{(matchStats[f.id]?.['1x2']?.away * 100 || 0).toFixed(1)}%</div>
+                                  <div className="font-bold text-blue-400">{(matchStats[f.id]?.['1x2']?.away_win * 100 || 0).toFixed(1)}%</div>
                                 </div>
                               </div>
                               <p className="text-xs text-slate-500 mt-3 text-center">
