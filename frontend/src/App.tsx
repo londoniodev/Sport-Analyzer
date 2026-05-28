@@ -7,12 +7,10 @@ import {
   LayoutDashboard,
   Calendar,
   Layers,
-  Percent,
   Search,
   ChevronRight,
   Sliders,
-  DollarSign,
-  AlertCircle
+  DollarSign
 } from 'lucide-react'
 
 interface Match {
@@ -35,12 +33,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
   const [matches, setMatches] = useState<Match[]>([])
-  const [loading, setLoading] = useState(false)
 
   // Fetch matches dynamically from FastAPI
   useEffect(() => {
     const fetchMatches = async () => {
-      setLoading(true)
       try {
         const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
         const res = await fetch(`${apiBaseUrl}/api/matches?sport=${encodeURIComponent(selectedSport)}`)
@@ -50,8 +46,6 @@ export default function App() {
         }
       } catch (err) {
         console.error("Error fetching matches:", err)
-      } finally {
-        setLoading(false)
       }
     }
     fetchMatches()
