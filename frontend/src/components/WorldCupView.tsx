@@ -537,7 +537,8 @@ export default function WorldCupView() {
             </Card>
           ))}
         </div>
-      )}
+      </div>
+    )}
 
       {/* TAB 2: Fixtures & Predictions */}
       {activeTab === 'fixtures' && (
