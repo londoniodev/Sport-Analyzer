@@ -199,10 +199,7 @@ class FootballAPIClient(ISportAPIClient):
     def get_team_fixtures(self, team_id: int, last_n: int = 20) -> List[Dict[str, Any]]:
         """
         Fetch last N played fixtures for a specific team.
-        Only returns finished matches (status = 'FT').
-        
-        NOTA: El plan gratuito de API-Football no soporta el parámetro 'last'.
-        Por eso usamos 'season' + filtrado local para obtener los últimos N partidos.
+        Uses the 'last' parameter (available on paid plans).
         
         Args:
             team_id: ID del equipo
@@ -211,24 +208,11 @@ class FootballAPIClient(ISportAPIClient):
         Returns:
             Lista de fixtures ordenados del más reciente al más antiguo
         """
-        from datetime import datetime
-        
-        # Obtener temporada actual (o la anterior si estamos a principio de año)
-        current_year = datetime.now().year
-        current_month = datetime.now().month
-        # Si estamos en enero-julio, la temporada principal es la del año anterior
-        calculated_season = current_year if current_month >= 7 else current_year - 1
-        
-        # LIMITACIÓN PLAN GRATUITO: Solo permite 2022-2024
-        # Si la temporada calculada excede el límite, usar la más reciente permitida
-        MAX_FREE_SEASON = 2024
-        season = min(calculated_season, MAX_FREE_SEASON)
-        
-        logger.info(f"[API-GET] Team Fixtures: team={team_id}, season={season}")
+        logger.info(f"[API-GET] Team Fixtures: team={team_id}, last={last_n}")
         url = f"{BASE_URL}/fixtures"
         params = {
             'team': team_id,
-            'season': season,
+            'last': last_n,
             'status': 'FT'  # Solo partidos finalizados
         }
         
@@ -249,17 +233,17 @@ class FootballAPIClient(ISportAPIClient):
             
             data = json_data.get('response', [])
             
-            # Ordenar por fecha descendente y tomar los últimos N
+            # Ordenar por fecha descendente
             sorted_fixtures = sorted(
                 data, 
                 key=lambda x: x.get('fixture', {}).get('date', ''),
                 reverse=True
             )
             
-            result = sorted_fixtures[:last_n]
-            logger.info(f"[API-SUCCESS] Fetched {len(result)} of {len(data)} fixtures for team {team_id}")
-            return result
+            logger.info(f"[API-SUCCESS] Fetched {len(sorted_fixtures)} fixtures for team {team_id}")
+            return sorted_fixtures
             
         except requests.exceptions.RequestException as e:
             logger.error(f"[API-EXCEPTION] {type(e).__name__}: {e}")
             return []
+

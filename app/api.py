@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select, func
 
 from app.core.database import get_session, init_db
-from app.sports.football.models import Team, Player, League, Fixture, Injury
+from app.sports.football.models import Team, Player, League, Fixture, Injury, WorldCupPrediction
 from app.sports.football.etl import FootballETL
 from app.services.rushbet_api import RushbetClient
 from app.sports.football.analytics.predictive.goals import (
@@ -311,6 +311,177 @@ def get_rushbet_event_detail(event_id: int, session: Session = Depends(get_sessi
         return detail
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# 5. World Cup 2026
+# ==========================================
+
+# Global sync progress tracker
+_wc_sync_status = {"running": False, "total": 0, "processed": 0, "current_team": "", "errors": []}
+
+def _run_worldcup_sync():
+    """Background task: sync World Cup fixtures + history for all 48 teams."""
+    from app.sports.football.analytics.worldcup_scoring import (
+        WORLD_CUP_TEAM_IDS, WORLD_CUP_LEAGUE_ID, WORLD_CUP_SEASON
+    )
+    global _wc_sync_status
+    _wc_sync_status = {"running": True, "total": len(WORLD_CUP_TEAM_IDS) + 1, "processed": 0, "current_team": "Fixtures del Mundial", "errors": []}
+    
+    etl = FootballETL()
+    
+    # Step 1: Sync World Cup fixtures (league_id=1, season=2026)
+    try:
+        etl.sync_league_data(league_id=WORLD_CUP_LEAGUE_ID, season=WORLD_CUP_SEASON, sync_details=True)
+    except Exception as e:
+        _wc_sync_status["errors"].append(f"WC Fixtures: {e}")
+    _wc_sync_status["processed"] = 1
+    
+    # Step 2: Sync last 20 matches for each of the 48 national teams
+    for i, team_id in enumerate(WORLD_CUP_TEAM_IDS):
+        _wc_sync_status["current_team"] = f"Team ID {team_id}"
+        try:
+            etl.sync_team_history(team_id, last_n=20)
+        except Exception as e:
+            _wc_sync_status["errors"].append(f"Team {team_id}: {e}")
+        _wc_sync_status["processed"] = i + 2  # +2 because fixtures was step 1
+    
+    _wc_sync_status["running"] = False
+    _wc_sync_status["current_team"] = "Completado"
+
+@app.post("/api/worldcup/sync")
+def start_worldcup_sync(background_tasks: BackgroundTasks):
+    """Inicia la descarga masiva de datos del Mundial en segundo plano."""
+    if _wc_sync_status.get("running"):
+        return {"message": "Sync already in progress", "status": _wc_sync_status}
+    background_tasks.add_task(_run_worldcup_sync)
+    return {"message": "World Cup sync started in background"}
+
+@app.get("/api/worldcup/sync-status")
+def get_worldcup_sync_status():
+    """Devuelve el progreso de la sincronización del Mundial."""
+    return _wc_sync_status
+
+@app.get("/api/worldcup/fixtures")
+def get_worldcup_fixtures(session: Session = Depends(get_session)):
+    """Lista los partidos del Mundial 2026 con resultados."""
+    from app.sports.football.analytics.worldcup_scoring import WORLD_CUP_LEAGUE_ID
+    stmt = (
+        select(Fixture, Team)
+        .join(Team, Fixture.home_team_id == Team.id)
+        .where(Fixture.league_id == WORLD_CUP_LEAGUE_ID)
+        .order_by(Fixture.date)
+    )
+    results = session.exec(stmt).all()
+    
+    fixtures = []
+    for fixture, home_team in results:
+        away_team = session.get(Team, fixture.away_team_id)
+        fixtures.append({
+            "id": fixture.id,
+            "date": fixture.date.isoformat() if fixture.date else None,
+            "home_team_id": fixture.home_team_id,
+            "away_team_id": fixture.away_team_id,
+            "home_team_name": home_team.name if home_team else "?",
+            "away_team_name": away_team.name if away_team else "?",
+            "home_score": fixture.home_score,
+            "away_score": fixture.away_score
+        })
+    return fixtures
+
+@app.get("/api/worldcup/predict/{home_id}/{away_id}")
+def predict_worldcup_match(home_id: int, away_id: int, session: Session = Depends(get_session)):
+    """Predicción automática para un enfrentamiento del Mundial usando data histórica."""
+    try:
+        prediction = get_full_match_prediction(home_id, away_id, session)
+        return prediction
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ScorePredictionRequest(BaseModel):
+    fixture_id: int
+    predicted_home_score: int
+    predicted_away_score: int
+
+@app.post("/api/worldcup/predict-score")
+def save_score_prediction(req: ScorePredictionRequest, session: Session = Depends(get_session)):
+    """Guarda o actualiza la predicción de marcador del usuario para un partido."""
+    # Check if prediction already exists for this fixture
+    existing = session.exec(
+        select(WorldCupPrediction).where(WorldCupPrediction.fixture_id == req.fixture_id)
+    ).first()
+    
+    if existing:
+        existing.predicted_home_score = req.predicted_home_score
+        existing.predicted_away_score = req.predicted_away_score
+        session.add(existing)
+    else:
+        pred = WorldCupPrediction(
+            fixture_id=req.fixture_id,
+            predicted_home_score=req.predicted_home_score,
+            predicted_away_score=req.predicted_away_score
+        )
+        session.add(pred)
+    
+    session.commit()
+    return {"message": "Prediction saved", "fixture_id": req.fixture_id}
+
+@app.get("/api/worldcup/predictions")
+def get_all_predictions(session: Session = Depends(get_session)):
+    """Lista todas las predicciones del usuario con puntos calculados."""
+    from app.sports.football.analytics.worldcup_scoring import calculate_match_points, get_points_label
+    
+    preds = session.exec(
+        select(WorldCupPrediction).order_by(WorldCupPrediction.fixture_id)
+    ).all()
+    
+    total_points = 0
+    result = []
+    for p in preds:
+        fixture = session.get(Fixture, p.fixture_id)
+        home_team = session.get(Team, fixture.home_team_id) if fixture else None
+        away_team = session.get(Team, fixture.away_team_id) if fixture else None
+        
+        # Recalculate points if actual scores are available
+        points = 0
+        label = ""
+        if fixture and fixture.home_score is not None and fixture.away_score is not None:
+            points = calculate_match_points(
+                p.predicted_home_score, p.predicted_away_score,
+                fixture.home_score, fixture.away_score
+            )
+            label = get_points_label(points)
+            # Update stored points
+            if p.points_earned != points:
+                p.points_earned = points
+                p.actual_home_score = fixture.home_score
+                p.actual_away_score = fixture.away_score
+                session.add(p)
+        
+        total_points += points
+        result.append({
+            "id": p.id,
+            "fixture_id": p.fixture_id,
+            "home_team": home_team.name if home_team else "?",
+            "away_team": away_team.name if away_team else "?",
+            "predicted_home": p.predicted_home_score,
+            "predicted_away": p.predicted_away_score,
+            "actual_home": fixture.home_score if fixture else None,
+            "actual_away": fixture.away_score if fixture else None,
+            "points": points,
+            "label": label
+        })
+    
+    session.commit()
+    return {"predictions": result, "total_points": total_points}
+
+@app.get("/api/worldcup/team-stats/{team_id}")
+def get_worldcup_team_stats(team_id: int, session: Session = Depends(get_session)):
+    """Obtiene resumen de estadísticas históricas de una selección."""
+    stats = get_team_stats_summary(team_id, 20, session)
+    if not stats:
+        return {"error": "No data available for this team"}
+    return stats
 
 
 # ==========================================

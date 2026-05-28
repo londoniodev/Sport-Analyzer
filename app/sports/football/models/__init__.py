@@ -191,3 +191,19 @@ class Referee(SQLModel, table=True):
     id: int = Field(primary_key=True)
     name: str
 
+
+class WorldCupPrediction(SQLModel, table=True):
+    """
+    Predicción de marcador para un partido del Mundial 2026 (Polla Mundialista).
+    Almacena la predicción del usuario y calcula puntos según las reglas oficiales.
+    """
+    __tablename__ = "worldcup_prediction"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    fixture_id: int = Field(foreign_key="football_fixture.id", index=True)
+    predicted_home_score: int
+    predicted_away_score: int
+    actual_home_score: Optional[int] = None
+    actual_away_score: Optional[int] = None
+    points_earned: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
