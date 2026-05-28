@@ -2,7 +2,50 @@
 Football Team Stats - Statistics calculations for football teams.
 """
 from sqlmodel import Session, select
-from app.sports.football.models import TeamMatchStats, Fixture
+from sqlalchemy import func
+from app.sports.football.models import TeamMatchStats, Fixture, PlayerMatchStats
+
+
+def get_team_squad_rating(team_id: int, last_n_games: int, session: Session) -> float:
+    """
+    Calculates the 'Squad Rating' (Calidad de Plantilla) for a team based on the average 
+    match ratings of their core players in the last N games.
+    """
+    # 1. Get the last N fixture IDs for this team
+    fixture_stmt = (
+        select(Fixture.id)
+        .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+        .where(Fixture.home_score != None) # Only completed matches
+        .order_by(Fixture.date.desc())
+        .limit(last_n_games)
+    )
+    fixture_ids = session.exec(fixture_stmt).all()
+    
+    if not fixture_ids:
+        return 6.5 # Default average football rating if no data
+        
+    # 2. Get player stats for this team in those fixtures
+    player_stmt = (
+        select(
+            PlayerMatchStats.player_id, 
+            func.sum(PlayerMatchStats.minutes_played).label('total_minutes'),
+            func.avg(PlayerMatchStats.rating).label('avg_rating')
+        )
+        .where(PlayerMatchStats.fixture_id.in_(fixture_ids))
+        .where(PlayerMatchStats.team_id == team_id)
+        .where(PlayerMatchStats.rating != None)
+        .group_by(PlayerMatchStats.player_id)
+        .order_by(func.sum(PlayerMatchStats.minutes_played).desc())
+        .limit(14) # Top 14 most used players (Starting XI + 3 frequent subs)
+    )
+    results = session.exec(player_stmt).all()
+    
+    if not results:
+        return 6.5
+        
+    # 3. Average the ratings of these core players
+    total_rating = sum(float(r.avg_rating) for r in results)
+    return total_rating / len(results)
 
 
 def get_team_corners_avg(team_id: int, last_n_games: int, session: Session) -> float:

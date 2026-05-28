@@ -6,7 +6,8 @@ from sqlmodel import Session
 from app.sports.football.analytics.models.poisson import PoissonEngine
 from app.sports.football.analytics.data.team_stats import (
     get_team_goals_avg,
-    get_team_goals_conceded_avg
+    get_team_goals_conceded_avg,
+    get_team_squad_rating
 )
 
 def calculate_expected_goals(
@@ -16,16 +17,34 @@ def calculate_expected_goals(
     last_n_games: int = 20,
     home_advantage: float = 1.1,
     use_weighted: bool = True
-) -> Tuple[float, float]:
-    """Calcula los goles esperados (xG) para los dos equipos."""
+) -> Tuple[float, float, float, float]:
+    """Calcula los goles esperados (xG) para los dos equipos integrando el Squad Rating."""
     home_attack = get_team_goals_avg(home_team_id, last_n_games, session, use_weighted=use_weighted)
     away_attack = get_team_goals_avg(away_team_id, last_n_games, session, use_weighted=use_weighted)
     home_defense = get_team_goals_conceded_avg(home_team_id, last_n_games, session, use_weighted=use_weighted)
     away_defense = get_team_goals_conceded_avg(away_team_id, last_n_games, session, use_weighted=use_weighted)
     
-    home_xg = ((home_attack + away_defense) / 2) * home_advantage
-    away_xg = (away_attack + home_defense) / 2
-    return home_xg, away_xg
+    # 1. Base xG calculation (Macro-Stats)
+    home_xg_base = ((home_attack + away_defense) / 2) * home_advantage
+    away_xg_base = (away_attack + home_defense) / 2
+    
+    # 2. Get Squad Ratings (Micro-Stats)
+    home_squad_rating = get_team_squad_rating(home_team_id, last_n_games, session)
+    away_squad_rating = get_team_squad_rating(away_team_id, last_n_games, session)
+    
+    # 3. Calculate Quality Modifier (Max 15% adjustment)
+    if home_squad_rating > 0 and away_squad_rating > 0:
+        ratio = home_squad_rating / away_squad_rating
+        # Cap ratio between 0.85 and 1.15 to prevent extreme distortions
+        quality_modifier = max(0.85, min(ratio, 1.15))
+        
+        home_xg = home_xg_base * quality_modifier
+        away_xg = away_xg_base / quality_modifier
+    else:
+        home_xg = home_xg_base
+        away_xg = away_xg_base
+        
+    return home_xg, away_xg, home_squad_rating, away_squad_rating
 
 def predict_goals_markets(home_xg: float, away_xg: float, max_goals: int = 6, rho: float = 0.1) -> Dict:
     """Predice mercados principales de goles (1X2, Over/Under, BTTS)."""
@@ -152,7 +171,7 @@ def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> D
     )
     from app.sports.football.analytics.predictive.advanced import AdvancedPredictor
     
-    home_xg, away_xg = calculate_expected_goals(home_id, away_id, session)
+    home_xg, away_xg, home_rating, away_rating = calculate_expected_goals(home_id, away_id, session)
     preds = predict_goals_markets(home_xg, away_xg)
     ht_preds = predict_halftime_markets(home_xg, away_xg)
     handicaps = predict_handicap_markets(home_xg, away_xg)
@@ -181,6 +200,7 @@ def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> D
     
     return {
         "expected_goals": {"home": round(home_xg, 2), "away": round(away_xg, 2)},
+        "squad_rating": {"home": round(home_rating, 2), "away": round(away_rating, 2)},
         "1x2": {
             "home_win": preds["1x2"]["home"],
             "draw": preds["1x2"]["draw"],

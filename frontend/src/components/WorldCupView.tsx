@@ -438,7 +438,10 @@ export default function WorldCupView() {
                             <div className="flex-1">
                               <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Probabilidad de Ganar (1X2)</h4>
                               <div className="grid grid-cols-3 gap-2">
-                                <div className="bg-slate-800 p-3 rounded-lg text-center">
+                                <div className="bg-slate-800 p-3 rounded-lg text-center relative overflow-hidden">
+                                  <div className="absolute top-0 right-0 bg-slate-700/50 text-[10px] px-1.5 py-0.5 rounded-bl-lg font-mono text-[#d4af37]">
+                                    ★ {matchStats[f.id]?.squad_rating?.home || "6.5"}
+                                  </div>
                                   <div className="text-xs text-slate-400 mb-1">{f.home_team_name}</div>
                                   <div className="font-bold text-green-400">{(matchStats[f.id]?.['1x2']?.home_win * 100 || 0).toFixed(1)}%</div>
                                 </div>
@@ -446,7 +449,10 @@ export default function WorldCupView() {
                                   <div className="text-xs text-slate-400 mb-1">Empate</div>
                                   <div className="font-bold text-yellow-400">{(matchStats[f.id]?.['1x2']?.draw * 100 || 0).toFixed(1)}%</div>
                                 </div>
-                                <div className="bg-slate-800 p-3 rounded-lg text-center">
+                                <div className="bg-slate-800 p-3 rounded-lg text-center relative overflow-hidden">
+                                  <div className="absolute top-0 right-0 bg-slate-700/50 text-[10px] px-1.5 py-0.5 rounded-bl-lg font-mono text-[#d4af37]">
+                                    ★ {matchStats[f.id]?.squad_rating?.away || "6.5"}
+                                  </div>
                                   <div className="text-xs text-slate-400 mb-1">{f.away_team_name}</div>
                                   <div className="font-bold text-blue-400">{(matchStats[f.id]?.['1x2']?.away_win * 100 || 0).toFixed(1)}%</div>
                                 </div>
