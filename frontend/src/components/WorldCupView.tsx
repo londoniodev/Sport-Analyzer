@@ -113,7 +113,7 @@ export default function WorldCupView() {
            setSimulatingGroupsProgress({ current: matchesSimulated, total: 72, message: `Simulando: ${teamHome.name} vs ${teamAway.name}` });
            
            try {
-               const res = await fetch(`/api/worldcup/predict/${teamHome.id}/${teamAway.id}`);
+               const res = await fetch(`/api/worldcup/predict/${teamHome.apiId}/${teamAway.apiId}`);
                const data = await res.json();
                
                const topScores = Object.entries(data.correct_score_top5);
@@ -294,7 +294,7 @@ export default function WorldCupView() {
     
     setSimulatingBracket(matchId);
     try {
-      const res = await fetch(`/api/worldcup/predict/${match.home_team.id}/${match.away_team.id}`);
+      const res = await fetch(`/api/worldcup/predict/${match.home_team.apiId}/${match.away_team.apiId}`);
       const data = await res.json();
       
       const topScores = Object.entries(data.correct_score_top5);
