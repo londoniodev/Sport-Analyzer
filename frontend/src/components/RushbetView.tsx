@@ -8,6 +8,7 @@ export default function RushbetView() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>('all');
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -26,6 +27,11 @@ export default function RushbetView() {
     return <RushbetDetailView eventId={selectedEventId} onBack={() => setSelectedEventId(null)} />;
   }
 
+  const uniqueLeagues = Array.from(new Set(events.map((e: any) => e.league))).sort();
+  const filteredEvents = selectedLeagueFilter === 'all' 
+    ? events 
+    : events.filter((e: any) => e.league === selectedLeagueFilter);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
@@ -35,10 +41,24 @@ export default function RushbetView() {
           </h2>
           <p className="text-slate-400 mt-2">Cuotas reales de Kambi/Rushbet sincronizadas al instante</p>
         </div>
-        <Button onClick={fetchEvents} disabled={loading} className="bg-green-600 hover:bg-green-700">
-          {loading ? <Activity className="w-4 h-4 mr-2 animate-spin" /> : <Activity className="w-4 h-4 mr-2" />}
-          Cargar Eventos
-        </Button>
+        <div className="flex gap-4 items-center">
+          {events.length > 0 && (
+            <select 
+              className="flex h-10 w-48 lg:w-64 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+              value={selectedLeagueFilter}
+              onChange={(e) => setSelectedLeagueFilter(e.target.value)}
+            >
+              <option value="all">Todas las ligas ({events.length})</option>
+              {uniqueLeagues.map((league: any) => (
+                <option key={league} value={league}>{league}</option>
+              ))}
+            </select>
+          )}
+          <Button onClick={fetchEvents} disabled={loading} className="bg-green-600 hover:bg-green-700">
+            {loading ? <Activity className="w-4 h-4 mr-2 animate-spin" /> : <Activity className="w-4 h-4 mr-2" />}
+            Cargar Eventos
+          </Button>
+        </div>
       </div>
 
       <Card className="bg-slate-900 border-slate-800 overflow-hidden">
@@ -60,8 +80,10 @@ export default function RushbetView() {
                 <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500"><Activity className="w-6 h-6 animate-spin mx-auto" /></td></tr>
               ) : events.length === 0 ? (
                 <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">Presiona "Cargar Eventos" para iniciar el web scraper.</td></tr>
+              ) : filteredEvents.length === 0 ? (
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">No hay eventos en esta liga.</td></tr>
               ) : (
-                events.map((e: any, i) => (
+                filteredEvents.map((e: any, i) => (
                   <tr key={e.id || i} className="border-b border-slate-800 hover:bg-slate-800/50 group cursor-pointer" onClick={() => setSelectedEventId(e.id)}>
                     <td className="px-6 py-4 text-slate-400 flex items-center gap-2">
                       <Clock className="w-3 h-3" /> {new Date(e.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

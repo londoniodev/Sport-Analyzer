@@ -4,13 +4,15 @@ import {
   Activity,
   LayoutDashboard,
   Calendar,
-  Users
+  Users,
+  Globe2
 } from 'lucide-react'
 
 import DashboardView from './components/DashboardView'
 import PredictionsView from './components/PredictionsView'
 import PlayerBrowserView from './components/PlayerBrowserView'
 import RushbetView from './components/RushbetView'
+import WorldCupView from './components/WorldCupView'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -39,7 +41,8 @@ export default function App() {
             { id: 'dashboard', icon: LayoutDashboard, label: 'Panel de Control' },
             { id: 'predictions', icon: Calendar, label: 'Predicciones' },
             { id: 'players', icon: Users, label: 'Explorador de Jugadores' },
-            { id: 'rushbet', icon: TrendingUp, label: 'Eventos Rushbet' }
+            { id: 'rushbet', icon: TrendingUp, label: 'Eventos Rushbet' },
+            { id: 'worldcup', icon: Globe2, label: 'Mundial 2026' }
           ].map((item) => (
             <button
               key={item.id}
@@ -66,6 +69,7 @@ export default function App() {
         {activeTab === 'predictions' && <PredictionsView />}
         {activeTab === 'players' && <PlayerBrowserView />}
         {activeTab === 'rushbet' && <RushbetView />}
+        {activeTab === 'worldcup' && <WorldCupView />}
       </main>
     </div>
   )

@@ -151,7 +151,7 @@ def get_teams(league_id: Optional[int] = None, session: Session = Depends(get_se
     else:
         teams = session.exec(select(Team).order_by(Team.name)).all()
         
-    return [{"id": t.id, "name": t.name, "code": t.code, "country": t.country, "logo": t.logo} for t in teams]
+    return [{"id": t.id, "name": t.name} for t in teams]
 
 @app.get("/api/teams/{team_id}/stats")
 def get_team_stats(team_id: int, session: Session = Depends(get_session)):
