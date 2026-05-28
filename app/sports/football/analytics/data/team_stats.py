@@ -317,3 +317,29 @@ def get_team_over_under_pct(team_id: int, last_n_games: int, threshold: float, s
         "under_pct": 1.0 - over_pct
     }
 
+
+def get_team_stats_summary(team_id: int, last_n_games: int, session: Session) -> dict:
+    """
+    Returns a unified summary of team statistics for the prediction UI.
+    """
+    corners_avg = get_team_corners_avg(team_id, last_n_games, session)
+    corners_conceded_avg = get_team_corners_conceded_avg(team_id, last_n_games, session)
+    possession_avg = get_team_possession_avg(team_id, last_n_games, session)
+    cards = get_team_cards_avg(team_id, last_n_games, session)
+    shots = get_team_shots_avg(team_id, last_n_games, session)
+    
+    goals_scored_avg = get_team_goals_avg(team_id, last_n_games, session)
+    goals_conceded_avg = get_team_goals_conceded_avg(team_id, last_n_games, session)
+
+    return {
+        "goals_scored_avg": goals_scored_avg,
+        "goals_conceded_avg": goals_conceded_avg,
+        "corners_avg": corners_avg,
+        "corners_conceded_avg": corners_conceded_avg,
+        "possession_avg": possession_avg,
+        "cards_yellow_avg": cards["yellow"],
+        "cards_total_avg": cards["yellow"] + cards["red"],
+        "shots_avg": shots["total"],
+        "shots_on_goal_avg": shots["on_goal"]
+    }
+
