@@ -506,8 +506,8 @@ export default function WorldCupView() {
                     {group.teams.map((team, tIndex) => (
                       <tr key={team.name} className={`border-b border-slate-800/30 ${tIndex < 2 ? 'bg-green-900/10' : tIndex === 2 ? 'bg-yellow-900/10' : 'opacity-60'}`}>
                         <td className="px-2 py-2 text-slate-500 font-mono text-center">{tIndex + 1}</td>
-                        <td className="px-2 py-2 font-medium flex items-center gap-2 truncate">
-                          <span className="text-xl">{team.flag}</span> <span className="truncate">{team.name}</span>
+                        <td className="px-2 py-2 font-medium break-words whitespace-normal leading-tight min-w-[100px]">
+                          <span className="break-words">{team.name}</span>
                         </td>
                         <td className="px-1 py-2 text-center text-slate-400">{team.played}</td>
                         <td className="px-1 py-2 text-center text-slate-400">{team.gd > 0 ? `+${team.gd}` : team.gd}</td>
