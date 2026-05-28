@@ -61,7 +61,12 @@ const generateInitialBracket = () => {
 
 export default function WorldCupView() {
   const [activeTab, setActiveTab] = useState<'groups' | 'fixtures' | 'predictions' | 'bracket'>('groups');
-  const [groups, setGroups] = useState(worldCupGroups.map(g => ({ ...g, teams: [...g.teams] })));
+  const [groups, setGroups] = useState(() => 
+    worldCupGroups.map(g => ({
+      ...g,
+      teams: g.teams.map(t => ({ ...t, played: 0, pts: 0, gf: 0, ga: 0, gd: 0 }))
+    }))
+  );
   
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
@@ -86,6 +91,9 @@ export default function WorldCupView() {
   const [bracket, setBracket] = useState<Record<string, BracketMatch>>(generateInitialBracket());
   const [simulatingBracket, setSimulatingBracket] = useState<string | null>(null);
   const [simulatingAll, setSimulatingAll] = useState(false);
+  
+  // Group Simulation State
+  const [simulatingGroupsProgress, setSimulatingGroupsProgress] = useState<{current: number, total: number, message: string} | null>(null);
 
   const moveTeam = (groupIndex: number, teamIndex: number, direction: 'up' | 'down') => {
     setGroups(prev => {
@@ -101,6 +109,68 @@ export default function WorldCupView() {
       newGroups[groupIndex] = group;
       return newGroups;
     });
+  };
+
+  const simulateGroupStage = async () => {
+    setSimulatingGroupsProgress({ current: 0, total: 72, message: 'Preparando calendarios...' });
+    
+    const updatedGroups = JSON.parse(JSON.stringify(groups));
+    let matchesSimulated = 0;
+    const matchPairs = [[0,1], [2,3], [0,2], [1,3], [0,3], [1,2]];
+    
+    for (let gIndex = 0; gIndex < 12; gIndex++) {
+       const group = updatedGroups[gIndex];
+       
+       for (const pair of matchPairs) {
+           const teamHome = group.teams[pair[0]];
+           const teamAway = group.teams[pair[1]];
+           
+           if (!teamHome || !teamAway) continue;
+           
+           setSimulatingGroupsProgress({ current: matchesSimulated, total: 72, message: `Simulando: ${teamHome.name} vs ${teamAway.name}` });
+           
+           try {
+               const res = await fetch(`/api/worldcup/predict/${teamHome.id}/${teamAway.id}`);
+               const data = await res.json();
+               
+               const topScores = Object.entries(data.correct_score_top5);
+               if (topScores && topScores.length > 0) {
+                   const mostLikelyScoreStr = topScores[0][0] as string;
+                   const [homeScore, awayScore] = mostLikelyScoreStr.split('-').map(Number);
+                   
+                   teamHome.played += 1;
+                   teamAway.played += 1;
+                   teamHome.gf += homeScore;
+                   teamHome.ga += awayScore;
+                   teamHome.gd = teamHome.gf - teamHome.ga;
+                   
+                   teamAway.gf += awayScore;
+                   teamAway.ga += homeScore;
+                   teamAway.gd = teamAway.gf - teamAway.ga;
+                   
+                   if (homeScore > awayScore) {
+                       teamHome.pts += 3;
+                   } else if (awayScore > homeScore) {
+                       teamAway.pts += 3;
+                   } else {
+                       teamHome.pts += 1;
+                       teamAway.pts += 1;
+                   }
+               }
+           } catch (e) { console.error("Sim fail", e); }
+           matchesSimulated++;
+       }
+       
+       // Sort the group by FIFA rules (Pts > GD > GF)
+       group.teams.sort((a: any, b: any) => {
+           if (b.pts !== a.pts) return b.pts - a.pts;
+           if (b.gd !== a.gd) return b.gd - a.gd;
+           return b.gf - a.gf;
+       });
+       
+       setGroups([...updatedGroups]); // Progressive UI update
+    }
+    setSimulatingGroupsProgress(null);
   };
 
   // Start World Cup data sync
@@ -208,12 +278,20 @@ export default function WorldCupView() {
 
   // Generate Knockout Bracket from Groups
   const generateBracketFromGroups = () => {
-    const groupResults = groups.map(g => g.teams);
-    const firsts = groupResults.map(g => g[0]);
-    const seconds = groupResults.map(g => g[1]);
-    const thirds = groupResults.map(g => g[2]);
-    const bestThirds = thirds.slice(0, 8); // Top 8 thirds
+    // 1. Get 1sts and 2nds
+    const firsts = groups.map(g => g.teams[0]);
+    const seconds = groups.map(g => g.teams[1]);
     
+    // 2. Mathematically calculate best 3rds
+    const allThirds = groups.map(g => g.teams[2]);
+    allThirds.sort((a: any, b: any) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        if (b.gd !== a.gd) return b.gd - a.gd;
+        return b.gf - a.gf;
+    });
+    const bestThirds = allThirds.slice(0, 8);
+    
+    // Seed and pair up
     const seeded = [...firsts, ...seconds.slice(0, 4)];
     const unseeded = [...seconds.slice(4), ...bestThirds];
     
@@ -392,11 +470,37 @@ export default function WorldCupView() {
       {/* TAB 1: Fase de Grupos */}
       {activeTab === 'groups' && (
         <div className="space-y-6">
-          <div className="flex justify-end">
-            <Button onClick={generateBracketFromGroups} className="bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]">
-              <Trophy className="w-4 h-4 mr-2" />
-              Continuar a Eliminatorias (Bracket)
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+            <div>
+              <h3 className="text-xl font-bold text-[#f3e5ab]">Posiciones y Simulación</h3>
+              <p className="text-sm text-slate-400">Genera los resultados usando distribución de Poisson</p>
+            </div>
+            
+            {simulatingGroupsProgress ? (
+              <div className="flex-1 w-full max-w-md bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <div className="flex justify-between text-xs mb-1 text-slate-400">
+                  <span>{simulatingGroupsProgress.message}</span>
+                  <span>{Math.round((simulatingGroupsProgress.current / simulatingGroupsProgress.total) * 100)}%</span>
+                </div>
+                <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300 ease-out" 
+                    style={{ width: `${(simulatingGroupsProgress.current / simulatingGroupsProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <Button onClick={simulateGroupStage} className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(79,70,229,0.3)]">
+                  <Zap className="w-4 h-4 mr-2" />
+                  Simular Todos los Grupos
+                </Button>
+                <Button onClick={generateBracketFromGroups} className="bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                  <Trophy className="w-4 h-4 mr-2" />
+                  Continuar a Bracket
+                </Button>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {groups.map((group, gIndex) => (
@@ -405,23 +509,30 @@ export default function WorldCupView() {
                 <CardTitle className="text-lg text-center text-[#d4af37] font-bold tracking-widest uppercase">{group.name}</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                {group.teams.map((team, tIndex) => (
-                  <div key={team.name} className={`flex items-center justify-between p-3 border-b border-slate-800/30 last:border-0 transition-colors ${
-                    tIndex < 2 ? 'bg-green-900/10' : tIndex === 2 ? 'bg-yellow-900/10' : 'bg-red-900/10 opacity-70'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`font-mono font-bold w-4 text-center ${tIndex < 2 ? 'text-green-500' : tIndex === 2 ? 'text-yellow-500' : 'text-slate-600'}`}>{tIndex + 1}</span>
-                      <span className="text-2xl">{team.flag}</span>
-                      <span className="font-medium text-slate-200 text-sm">{team.name}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <button onClick={() => moveTeam(gIndex, tIndex, 'up')} disabled={tIndex === 0}
-                        className="text-slate-500 hover:text-white disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
-                      <button onClick={() => moveTeam(gIndex, tIndex, 'down')} disabled={tIndex === 3}
-                        className="text-slate-500 hover:text-white disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                ))}
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-900 text-slate-400">
+                    <tr>
+                      <th className="px-2 py-2 w-8">#</th>
+                      <th className="px-2 py-2">País</th>
+                      <th className="px-1 py-2 text-center" title="Partidos Jugados">PJ</th>
+                      <th className="px-1 py-2 text-center" title="Diferencia de Goles">DG</th>
+                      <th className="px-2 py-2 text-center font-bold text-slate-200">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.teams.map((team, tIndex) => (
+                      <tr key={team.name} className={`border-b border-slate-800/30 ${tIndex < 2 ? 'bg-green-900/10' : tIndex === 2 ? 'bg-yellow-900/10' : 'opacity-60'}`}>
+                        <td className="px-2 py-2 text-slate-500 font-mono text-center">{tIndex + 1}</td>
+                        <td className="px-2 py-2 font-medium flex items-center gap-2 truncate">
+                          <span className="text-xl">{team.flag}</span> <span className="truncate">{team.name}</span>
+                        </td>
+                        <td className="px-1 py-2 text-center text-slate-400">{team.played}</td>
+                        <td className="px-1 py-2 text-center text-slate-400">{team.gd > 0 ? `+${team.gd}` : team.gd}</td>
+                        <td className="px-2 py-2 text-center font-bold text-[#f3e5ab]">{team.pts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </CardContent>
             </Card>
           ))}
