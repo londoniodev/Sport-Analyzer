@@ -55,6 +55,11 @@ export default function WorldCupView() {
   const [scoreInputs, setScoreInputs] = useState<Record<number, {home: string, away: string}>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
 
+  // Stats / Probabilities
+  const [matchStats, setMatchStats] = useState<Record<number, any>>({});
+  const [loadingStats, setLoadingStats] = useState<Record<number, boolean>>({});
+  const [expandedStatsId, setExpandedStatsId] = useState<number | null>(null);
+
   const moveTeam = (groupIndex: number, teamIndex: number, direction: 'up' | 'down') => {
     setGroups(prev => {
       const newGroups = [...prev];
@@ -147,6 +152,31 @@ export default function WorldCupView() {
       fetchPredictions();
     } catch (e) { console.error(e); }
     finally { setSavingId(null); }
+  };
+
+  // Load statistical probabilities for a match
+  const loadMatchStats = async (fixture: WCFixture) => {
+    if (expandedStatsId === fixture.id) {
+      setExpandedStatsId(null);
+      return;
+    }
+    
+    if (matchStats[fixture.id]) {
+      setExpandedStatsId(fixture.id);
+      return;
+    }
+
+    setLoadingStats(prev => ({ ...prev, [fixture.id]: true }));
+    try {
+      const res = await fetch(`/api/worldcup/predict/${fixture.home_team_id}/${fixture.away_team_id}`);
+      const data = await res.json();
+      setMatchStats(prev => ({ ...prev, [fixture.id]: data }));
+      setExpandedStatsId(fixture.id);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingStats(prev => ({ ...prev, [fixture.id]: false }));
+    }
   };
 
   useEffect(() => {
@@ -347,12 +377,23 @@ export default function WorldCupView() {
                           <div className="flex items-center gap-2 shrink-0">
                             <Button
                               size="sm"
+                              onClick={() => loadMatchStats(f)}
+                              disabled={loadingStats[f.id]}
+                              variant="outline"
+                              className="text-xs px-2 h-8 bg-slate-800 border-slate-700 hover:bg-slate-700"
+                              title="Ver Probabilidades"
+                            >
+                              {loadingStats[f.id] ? <RefreshCw className="w-3 h-3 animate-spin" /> : <BarChart3 className="w-3 h-3 text-blue-400" />}
+                            </Button>
+                            
+                            <Button
+                              size="sm"
                               onClick={() => savePrediction(f.id)}
                               disabled={savingId === f.id || !input.home || !input.away}
-                              className="bg-[#d4af37]/20 hover:bg-[#d4af37]/30 text-[#d4af37] border border-[#d4af37]/30 text-xs px-3"
+                              className="bg-[#d4af37]/20 hover:bg-[#d4af37]/30 text-[#d4af37] border border-[#d4af37]/30 text-xs px-3 h-8"
                             >
                               {savingId === f.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                              <span className="ml-1">{existing ? 'Actualizar' : 'Guardar'}</span>
+                              <span className="ml-1 hidden md:inline">{existing ? 'Actualizar' : 'Guardar'}</span>
                             </Button>
                             
                             {hasResult && (
@@ -369,6 +410,54 @@ export default function WorldCupView() {
                           </div>
                         </div>
                       </CardContent>
+
+                      {/* Probabilities Expansion */}
+                      {expandedStatsId === f.id && matchStats[f.id] && (
+                        <div className="bg-slate-950 border-t border-slate-800 p-4 animate-in slide-in-from-top-2">
+                          <div className="flex flex-col md:flex-row gap-6">
+                            {/* Correct Score Probabilities */}
+                            <div className="flex-1">
+                              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Marcadores Más Probables</h4>
+                              <div className="space-y-2">
+                                {Object.entries(matchStats[f.id]?.correct_score_top5 || {}).map(([score, prob]: [string, any]) => (
+                                  <div key={score} className="flex items-center gap-3 text-sm">
+                                    <span className="font-mono font-bold text-[#f3e5ab] w-12 text-right">{score}</span>
+                                    <div className="flex-grow bg-slate-800 rounded-full h-2 overflow-hidden">
+                                      <div 
+                                        className="bg-blue-500 h-full rounded-full" 
+                                        style={{ width: `${Math.min(prob * 100 * 3, 100)}%` }} // *3 just to make bars visible, Poisson exact scores are usually < 15%
+                                      />
+                                    </div>
+                                    <span className="font-mono text-slate-300 w-12">{(prob * 100).toFixed(1)}%</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* Match Odds 1X2 */}
+                            <div className="flex-1">
+                              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Probabilidad de Ganar (1X2)</h4>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="bg-slate-800 p-3 rounded-lg text-center">
+                                  <div className="text-xs text-slate-400 mb-1">{f.home_team_name}</div>
+                                  <div className="font-bold text-green-400">{(matchStats[f.id]?.['1x2']?.home * 100 || 0).toFixed(1)}%</div>
+                                </div>
+                                <div className="bg-slate-800 p-3 rounded-lg text-center border border-slate-700">
+                                  <div className="text-xs text-slate-400 mb-1">Empate</div>
+                                  <div className="font-bold text-yellow-400">{(matchStats[f.id]?.['1x2']?.draw * 100 || 0).toFixed(1)}%</div>
+                                </div>
+                                <div className="bg-slate-800 p-3 rounded-lg text-center">
+                                  <div className="text-xs text-slate-400 mb-1">{f.away_team_name}</div>
+                                  <div className="font-bold text-blue-400">{(matchStats[f.id]?.['1x2']?.away * 100 || 0).toFixed(1)}%</div>
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-3 text-center">
+                                Basado en el historial de los últimos 20 partidos mediante distribución de Poisson.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </Card>
                   );
                 })}

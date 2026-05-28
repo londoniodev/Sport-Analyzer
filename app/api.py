@@ -320,7 +320,7 @@ def get_rushbet_event_detail(event_id: int, session: Session = Depends(get_sessi
 # Global sync progress tracker
 _wc_sync_status = {"running": False, "total": 0, "processed": 0, "current_team": "", "errors": []}
 
-def _run_worldcup_sync():
+def _run_worldcup_sync(resume: bool = True):
     """Background task: sync World Cup fixtures + history for all 48 teams."""
     from app.sports.football.analytics.worldcup_scoring import (
         WORLD_CUP_TEAM_IDS, WORLD_CUP_LEAGUE_ID, WORLD_CUP_SEASON
@@ -331,31 +331,45 @@ def _run_worldcup_sync():
     etl = FootballETL()
     
     # Step 1: Sync World Cup fixtures (league_id=1, season=2026)
-    try:
-        etl.sync_league_data(league_id=WORLD_CUP_LEAGUE_ID, season=WORLD_CUP_SEASON, sync_details=True)
-    except Exception as e:
-        _wc_sync_status["errors"].append(f"WC Fixtures: {e}")
+    if not resume:
+        try:
+            etl.sync_league_data(league_id=WORLD_CUP_LEAGUE_ID, season=WORLD_CUP_SEASON, sync_details=True)
+        except Exception as e:
+            _wc_sync_status["errors"].append(f"WC Fixtures: {e}")
     _wc_sync_status["processed"] = 1
     
     # Step 2: Sync last 20 matches for each of the 48 national teams
-    for i, team_id in enumerate(WORLD_CUP_TEAM_IDS):
-        _wc_sync_status["current_team"] = f"Team ID {team_id}"
-        try:
-            etl.sync_team_history(team_id, last_n=20)
-        except Exception as e:
-            _wc_sync_status["errors"].append(f"Team {team_id}: {e}")
-        _wc_sync_status["processed"] = i + 2  # +2 because fixtures was step 1
+    with etl._get_db_session() as session:
+        for i, team_id in enumerate(WORLD_CUP_TEAM_IDS):
+            _wc_sync_status["current_team"] = f"Team ID {team_id}"
+            
+            if resume:
+                # Check if this team already has enough fixtures in the DB
+                count = session.exec(
+                    select(func.count(Fixture.id))
+                    .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
+                ).one()
+                if count >= 15:
+                    logger.info(f"Team {team_id} already has {count} fixtures. Skipping.")
+                    _wc_sync_status["processed"] = i + 2
+                    continue
+                    
+            try:
+                etl.sync_team_history(team_id, last_n=20)
+            except Exception as e:
+                _wc_sync_status["errors"].append(f"Team {team_id}: {e}")
+            _wc_sync_status["processed"] = i + 2  # +2 because fixtures was step 1
     
     _wc_sync_status["running"] = False
     _wc_sync_status["current_team"] = "Completado"
 
 @app.post("/api/worldcup/sync")
-def start_worldcup_sync(background_tasks: BackgroundTasks):
+def start_worldcup_sync(background_tasks: BackgroundTasks, resume: bool = Query(True, description="Skip already synced teams")):
     """Inicia la descarga masiva de datos del Mundial en segundo plano."""
     if _wc_sync_status.get("running"):
         return {"message": "Sync already in progress", "status": _wc_sync_status}
-    background_tasks.add_task(_run_worldcup_sync)
-    return {"message": "World Cup sync started in background"}
+    background_tasks.add_task(_run_worldcup_sync, resume)
+    return {"message": "World Cup sync started in background", "resume_mode": resume}
 
 @app.get("/api/worldcup/sync-status")
 def get_worldcup_sync_status():

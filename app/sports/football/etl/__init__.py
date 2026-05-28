@@ -245,31 +245,22 @@ class FootballETL(ISportETL):
         Sincroniza detalles por lotes con un pequeño retraso para evitar 
         bloqueos por límite de peticiones (Rate Limit) de la API.
         
-        OPTIMIZACIÓN: Usa una sola sesión de BD para todo el lote.
+        Usa una sesión independiente por partido para evitar que un error invalide todo el lote.
         """
         logger.info(f"[DETAILS-BATCH] Procesando {len(fixture_ids)} partidos")
         
-        # Usamos una sola sesión persistente para todo el proceso del batch
-        with self._get_db_session() as session:
-            for i, fid in enumerate(fixture_ids):
-                try:
-                    # Pasamos la sesión explícitamente para reutilizarla
-                    self.sync_event_details(fid, session=session)
-                    
-                    # Commit periódico cada 50 items para no sobrecargar la transacción
-                    if (i + 1) % 50 == 0:
-                        session.commit()
-                        logger.info(f"[DETAILS-BATCH] Progreso: {i + 1}/{len(fixture_ids)} (Commit parcial)")
-                    
-                    time.sleep(delay)
-                except Exception as e:
-                    logger.warning(f"[DETAILS-BATCH] Partido {fid} falló: {e}")
-                    # En caso de error, hacemos rollback parcial pero intentamos seguir con otros?
-                    # Como _get_db_session hace rollback completo al salir si hay excepción, 
-                    # aquí debemos tener cuidado de no romper todo el loop por un fallo.
-                    # Pero session.rollback() revertiría TODO lo no commiteado.
-                    # Para seguridad, idealmente usaríamos savepoints (bulk_save_objects), 
-                    # pero por simplicidad solo logueamos. Si falla la escritura, fallará el commit final.
+        for i, fid in enumerate(fixture_ids):
+            try:
+                # No pasamos session para que cree una nueva aislada por cada fixture
+                self.sync_event_details(fid)
+                
+                if (i + 1) % 50 == 0:
+                    logger.info(f"[DETAILS-BATCH] Progreso: {i + 1}/{len(fixture_ids)}")
+                
+                time.sleep(delay)
+            except Exception as e:
+                logger.warning(f"[DETAILS-BATCH] Partido {fid} falló: {e}")
+                # El error ya fue capturado y la sesión interna hizo rollback, podemos continuar.
     
     def _process_fixture(self, data: Dict[str, Any], session: Session) -> Optional[Fixture]:
         """Transforma los datos de un partido para guardarlos en SQLModel."""
