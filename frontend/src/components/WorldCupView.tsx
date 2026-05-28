@@ -37,8 +37,30 @@ interface Prediction {
   label: string;
 }
 
+interface BracketMatch {
+  id: string;
+  round: 'R32' | 'R16' | 'QF' | 'SF' | 'F';
+  home_team: any | null;
+  away_team: any | null;
+  home_score: number | null;
+  away_score: number | null;
+  winner: 'home' | 'away' | null;
+  nextMatchId: string | null;
+  isHomeNext: boolean;
+}
+
+const generateInitialBracket = () => {
+  const b: Record<string, BracketMatch> = {};
+  for (let i = 1; i <= 16; i++) b[`R32-${i}`] = { id: `R32-${i}`, round: 'R32', home_team: null, away_team: null, home_score: null, away_score: null, winner: null, nextMatchId: `R16-${Math.ceil(i/2)}`, isHomeNext: i % 2 !== 0 };
+  for (let i = 1; i <= 8; i++) b[`R16-${i}`] = { id: `R16-${i}`, round: 'R16', home_team: null, away_team: null, home_score: null, away_score: null, winner: null, nextMatchId: `QF-${Math.ceil(i/2)}`, isHomeNext: i % 2 !== 0 };
+  for (let i = 1; i <= 4; i++) b[`QF-${i}`] = { id: `QF-${i}`, round: 'QF', home_team: null, away_team: null, home_score: null, away_score: null, winner: null, nextMatchId: `SF-${Math.ceil(i/2)}`, isHomeNext: i % 2 !== 0 };
+  for (let i = 1; i <= 2; i++) b[`SF-${i}`] = { id: `SF-${i}`, round: 'SF', home_team: null, away_team: null, home_score: null, away_score: null, winner: null, nextMatchId: `F-1`, isHomeNext: i % 2 !== 0 };
+  b[`F-1`] = { id: `F-1`, round: 'F', home_team: null, away_team: null, home_score: null, away_score: null, winner: null, nextMatchId: null, isHomeNext: true };
+  return b;
+};
+
 export default function WorldCupView() {
-  const [activeTab, setActiveTab] = useState<'groups' | 'fixtures' | 'predictions'>('groups');
+  const [activeTab, setActiveTab] = useState<'groups' | 'fixtures' | 'predictions' | 'bracket'>('groups');
   const [groups, setGroups] = useState(worldCupGroups.map(g => ({ ...g, teams: [...g.teams] })));
   
   // Sync state
@@ -59,6 +81,11 @@ export default function WorldCupView() {
   const [matchStats, setMatchStats] = useState<Record<number, any>>({});
   const [loadingStats, setLoadingStats] = useState<Record<number, boolean>>({});
   const [expandedStatsId, setExpandedStatsId] = useState<number | null>(null);
+
+  // Bracket State
+  const [bracket, setBracket] = useState<Record<string, BracketMatch>>(generateInitialBracket());
+  const [simulatingBracket, setSimulatingBracket] = useState<string | null>(null);
+  const [simulatingAll, setSimulatingAll] = useState(false);
 
   const moveTeam = (groupIndex: number, teamIndex: number, direction: 'up' | 'down') => {
     setGroups(prev => {
@@ -179,6 +206,97 @@ export default function WorldCupView() {
     }
   };
 
+  // Generate Knockout Bracket from Groups
+  const generateBracketFromGroups = () => {
+    const groupResults = groups.map(g => g.teams);
+    const firsts = groupResults.map(g => g[0]);
+    const seconds = groupResults.map(g => g[1]);
+    const thirds = groupResults.map(g => g[2]);
+    const bestThirds = thirds.slice(0, 8); // Top 8 thirds
+    
+    const seeded = [...firsts, ...seconds.slice(0, 4)];
+    const unseeded = [...seconds.slice(4), ...bestThirds];
+    
+    const newBracket = generateInitialBracket();
+    for (let i = 0; i < 16; i++) {
+      newBracket[`R32-${i+1}`].home_team = seeded[i];
+      newBracket[`R32-${i+1}`].away_team = unseeded[15 - i];
+    }
+    setBracket(newBracket);
+    setActiveTab('bracket');
+  };
+
+  // Simulate a single bracket match
+  const simulateBracketMatch = async (matchId: string, currentBracket: Record<string, BracketMatch>) => {
+    const match = currentBracket[matchId];
+    if (!match.home_team || !match.away_team || match.winner) return currentBracket;
+    
+    setSimulatingBracket(matchId);
+    try {
+      const res = await fetch(`/api/worldcup/predict/${match.home_team.id}/${match.away_team.id}`);
+      const data = await res.json();
+      
+      const topScores = Object.entries(data.correct_score_top5);
+      if (!topScores || topScores.length === 0) return currentBracket;
+      
+      let mostLikelyScoreStr = topScores[0][0] as string;
+      let [homeScore, awayScore] = mostLikelyScoreStr.split('-').map(Number);
+      let winner: 'home' | 'away' = homeScore > awayScore ? 'home' : (awayScore > homeScore ? 'away' : 'home'); // Default to home if tie logic fails
+      
+      // Knockouts can't tie, use 1X2 odds to decide penalty winner
+      if (homeScore === awayScore) {
+         const pHome = data['1x2'].home_win || 0;
+         const pAway = data['1x2'].away_win || 0;
+         winner = pHome >= pAway ? 'home' : 'away';
+         if (winner === 'home') homeScore += 1; else awayScore += 1;
+      }
+      
+      const newB = { ...currentBracket };
+      newB[matchId] = { ...newB[matchId], home_score: homeScore, away_score: awayScore, winner };
+      
+      // Advance winner
+      const nextId = newB[matchId].nextMatchId;
+      if (nextId) {
+          const advancingTeam = winner === 'home' ? match.home_team : match.away_team;
+          newB[nextId] = { ...newB[nextId] };
+          if (newB[matchId].isHomeNext) {
+              newB[nextId].home_team = advancingTeam;
+          } else {
+              newB[nextId].away_team = advancingTeam;
+          }
+      }
+      return newB;
+    } catch (e) {
+      console.error(e);
+      return currentBracket;
+    } finally {
+      setSimulatingBracket(null);
+    }
+  };
+
+  const handleSimulateSingle = async (matchId: string) => {
+    const newBracket = await simulateBracketMatch(matchId, bracket);
+    setBracket(newBracket);
+  };
+
+  const handleSimulateAll = async () => {
+    setSimulatingAll(true);
+    let currentB = { ...bracket };
+    const rounds = ['R32', 'R16', 'QF', 'SF', 'F'];
+    
+    for (const r of rounds) {
+      const matchIds = Object.keys(currentB).filter(k => k.startsWith(r + '-'));
+      for (const id of matchIds) {
+        if (currentB[id].home_team && currentB[id].away_team && !currentB[id].winner) {
+          currentB = await simulateBracketMatch(id, currentB);
+          setBracket(currentB); // Update UI progressively
+          await new Promise(res => setTimeout(res, 200)); // Visual delay
+        }
+      }
+    }
+    setSimulatingAll(false);
+  };
+
   useEffect(() => {
     if (activeTab === 'fixtures') { fetchFixtures(); fetchPredictions(); }
     if (activeTab === 'predictions') { fetchPredictions(); }
@@ -203,6 +321,7 @@ export default function WorldCupView() {
 
   const tabs = [
     { id: 'groups' as const, label: 'Fase de Grupos', icon: Trophy },
+    { id: 'bracket' as const, label: 'Simulador Eliminatorias', icon: Zap },
     { id: 'fixtures' as const, label: 'Partidos & Pronósticos', icon: Swords },
     { id: 'predictions' as const, label: 'Mis Puntos', icon: BarChart3 },
   ];
@@ -272,8 +391,15 @@ export default function WorldCupView() {
 
       {/* TAB 1: Fase de Grupos */}
       {activeTab === 'groups' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {groups.map((group, gIndex) => (
+        <div className="space-y-6">
+          <div className="flex justify-end">
+            <Button onClick={generateBracketFromGroups} className="bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+              <Trophy className="w-4 h-4 mr-2" />
+              Continuar a Eliminatorias (Bracket)
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {groups.map((group, gIndex) => (
             <Card key={group.name} className="bg-gradient-to-b from-slate-900 to-slate-950 border-slate-800 shadow-xl overflow-hidden hover:border-[#d4af37]/30 transition-colors">
               <CardHeader className="bg-slate-950/50 border-b border-slate-800/50 py-3">
                 <CardTitle className="text-lg text-center text-[#d4af37] font-bold tracking-widest uppercase">{group.name}</CardTitle>
@@ -562,6 +688,100 @@ export default function WorldCupView() {
               </div>
             </Card>
           )}
+        </div>
+      )}
+      {/* TAB 4: Bracket Simulator */}
+      {activeTab === 'bracket' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+            <div>
+              <h3 className="text-xl font-bold text-[#f3e5ab]">Árbol de Eliminatorias</h3>
+              <p className="text-sm text-slate-400">Simula la fase final usando el motor probabilístico de Poisson</p>
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={generateBracketFromGroups} variant="outline" className="border-slate-700 hover:bg-slate-800">
+                <RefreshCw className="w-4 h-4 mr-2" /> Reiniciar
+              </Button>
+              <Button onClick={handleSimulateAll} disabled={simulatingAll} className="bg-[#d4af37] hover:bg-[#c9a520] text-black font-bold shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+                {simulatingAll ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+                Simular Todo
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto pb-8">
+            <div className="flex gap-8 min-w-max px-4">
+              {/* Bracket Columns */}
+              {['R32', 'R16', 'QF', 'SF', 'F'].map((round, colIndex) => {
+                const roundMatches = Object.values(bracket).filter(m => m.round === round);
+                return (
+                  <div key={round} className="flex flex-col justify-around gap-4" style={{ width: '220px' }}>
+                    <div className="text-center font-bold text-slate-500 mb-4 uppercase tracking-widest text-xs">
+                      {round === 'R32' ? 'Dieciseisavos' : round === 'R16' ? 'Octavos' : round === 'QF' ? 'Cuartos' : round === 'SF' ? 'Semifinal' : 'Final'}
+                    </div>
+                    {roundMatches.map(m => (
+                      <div key={m.id} className="relative">
+                        <Card className={`bg-slate-900 border ${m.winner ? 'border-[#d4af37]/50 shadow-[0_0_10px_rgba(212,175,55,0.1)]' : 'border-slate-800'} overflow-hidden relative z-10`}>
+                          <div className="flex flex-col text-sm">
+                            {/* Home Team */}
+                            <div className={`flex items-center justify-between p-2 border-b border-slate-800/50 ${m.winner === 'home' ? 'bg-[#d4af37]/10' : ''}`}>
+                              <div className="flex items-center gap-2 truncate">
+                                <span>{m.home_team ? getFlag(m.home_team.name) : '🏳️'}</span>
+                                <span className={`truncate ${m.winner === 'away' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{m.home_team ? m.home_team.name : 'TBD'}</span>
+                              </div>
+                              <span className={`font-mono font-bold ${m.winner === 'home' ? 'text-[#d4af37]' : 'text-slate-400'}`}>{m.home_score !== null ? m.home_score : '-'}</span>
+                            </div>
+                            {/* Away Team */}
+                            <div className={`flex items-center justify-between p-2 ${m.winner === 'away' ? 'bg-[#d4af37]/10' : ''}`}>
+                              <div className="flex items-center gap-2 truncate">
+                                <span>{m.away_team ? getFlag(m.away_team.name) : '🏳️'}</span>
+                                <span className={`truncate ${m.winner === 'home' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{m.away_team ? m.away_team.name : 'TBD'}</span>
+                              </div>
+                              <span className={`font-mono font-bold ${m.winner === 'away' ? 'text-[#d4af37]' : 'text-slate-400'}`}>{m.away_score !== null ? m.away_score : '-'}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Simulate Overlay Button */}
+                          {!m.winner && m.home_team && m.away_team && (
+                            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[1px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                              <Button size="sm" onClick={() => handleSimulateSingle(m.id)} disabled={simulatingBracket === m.id} className="bg-[#d4af37]/20 hover:bg-[#d4af37]/40 text-[#d4af37] border border-[#d4af37]/50 h-8 text-xs">
+                                {simulatingBracket === m.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Simular'}
+                              </Button>
+                            </div>
+                          )}
+                        </Card>
+                        
+                        {/* Connector Lines (Visual) */}
+                        {colIndex < 4 && (
+                           <div className="absolute top-1/2 -right-4 w-4 border-t-2 border-slate-700 z-0" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              
+              {/* Champion Box */}
+              <div className="flex flex-col justify-center" style={{ width: '220px' }}>
+                <div className="text-center font-bold text-[#d4af37] mb-4 uppercase tracking-widest text-xs">Campeón</div>
+                <Card className="bg-gradient-to-b from-[#d4af37]/20 to-slate-900 border-[#d4af37] border-2 shadow-[0_0_30px_rgba(212,175,55,0.3)] overflow-hidden">
+                  <CardContent className="p-6 text-center">
+                    <Trophy className="w-16 h-16 text-[#d4af37] mx-auto mb-4" />
+                    {bracket['F-1'].winner ? (
+                      <div>
+                        <div className="text-4xl mb-2">{getFlag(bracket['F-1'][`${bracket['F-1'].winner}_team`].name)}</div>
+                        <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#d4af37] to-[#f3e5ab] uppercase">
+                          {bracket['F-1'][`${bracket['F-1'].winner}_team`].name}
+                        </h2>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500 font-bold uppercase tracking-widest">TBD</span>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
