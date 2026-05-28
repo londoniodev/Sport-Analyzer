@@ -120,6 +120,18 @@ export default function PredictionsView() {
               </div>
               <input type="range" min="2" max="10" step="0.5" value={params.home_corners} onChange={e => updateParam('home_corners', e.target.value)} className="w-full accent-blue-500" />
             </div>
+            <div>
+              <div className="flex justify-between text-sm text-slate-400 mb-1">
+                <span>Tarjetas (Avg)</span><span>{params.home_cards.toFixed(2)}</span>
+              </div>
+              <input type="range" min="0.5" max="5.0" step="0.1" value={params.home_cards} onChange={e => updateParam('home_cards', e.target.value)} className="w-full accent-blue-500" />
+            </div>
+            <div>
+              <div className="flex justify-between text-sm text-slate-400 mb-1">
+                <span>Remates (Avg)</span><span>{params.home_shots.toFixed(2)}</span>
+              </div>
+              <input type="range" min="5.0" max="25.0" step="0.5" value={params.home_shots} onChange={e => updateParam('home_shots', e.target.value)} className="w-full accent-blue-500" />
+            </div>
           </CardContent>
         </Card>
 
@@ -154,6 +166,18 @@ export default function PredictionsView() {
                 <span>Córners (Avg)</span><span>{params.away_corners.toFixed(2)}</span>
               </div>
               <input type="range" min="2" max="10" step="0.5" value={params.away_corners} onChange={e => updateParam('away_corners', e.target.value)} className="w-full accent-red-500" />
+            </div>
+            <div>
+              <div className="flex justify-between text-sm text-slate-400 mb-1">
+                <span>Tarjetas (Avg)</span><span>{params.away_cards.toFixed(2)}</span>
+              </div>
+              <input type="range" min="0.5" max="5.0" step="0.1" value={params.away_cards} onChange={e => updateParam('away_cards', e.target.value)} className="w-full accent-red-500" />
+            </div>
+            <div>
+              <div className="flex justify-between text-sm text-slate-400 mb-1">
+                <span>Remates (Avg)</span><span>{params.away_shots.toFixed(2)}</span>
+              </div>
+              <input type="range" min="5.0" max="25.0" step="0.5" value={params.away_shots} onChange={e => updateParam('away_shots', e.target.value)} className="w-full accent-red-500" />
             </div>
           </CardContent>
         </Card>
@@ -273,16 +297,16 @@ export default function PredictionsView() {
                 <Card className="bg-slate-900 border-slate-800">
                   <CardHeader><CardTitle className="text-slate-100">Córners Esperados</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center"><span className="text-slate-400">Local</span><span className="text-xl font-bold">{prediction.corners?.home_expected?.toFixed(1)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-slate-400">Visitante</span><span className="text-xl font-bold">{prediction.corners?.away_expected?.toFixed(1)}</span></div>
-                    <div className="flex justify-between items-center border-t border-slate-800 pt-2"><span className="text-slate-300">Total</span><span className="text-xl font-bold text-green-400">{prediction.corners?.total_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Local</span><span className="text-xl font-bold">{prediction.corners?.expected?.home?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Visitante</span><span className="text-xl font-bold">{prediction.corners?.expected?.away?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center border-t border-slate-800 pt-2"><span className="text-slate-300">Total</span><span className="text-xl font-bold text-green-400">{prediction.corners?.expected?.total?.toFixed(1)}</span></div>
                   </CardContent>
                 </Card>
                 <Card className="bg-slate-900 border-slate-800">
                   <CardHeader><CardTitle className="text-slate-100">Over/Under Córners</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                     {Object.entries(prediction.corners?.over_under || {}).map(([line, probs]: any) => (
-                      <div key={line} className="flex justify-between items-center p-2 bg-slate-950 rounded">
+                      <div key={line} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-slate-800/50">
                         <span className="text-slate-300">Más de {line}</span>
                         <span className="text-blue-400 font-bold">{(probs.over * 100).toFixed(1)}%</span>
                       </div>
@@ -297,16 +321,16 @@ export default function PredictionsView() {
                 <Card className="bg-slate-900 border-slate-800">
                   <CardHeader><CardTitle className="text-slate-100">Tarjetas Esperadas</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center"><span className="text-slate-400">Local</span><span className="text-xl font-bold">{prediction.cards?.home_expected?.toFixed(1)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-slate-400">Visitante</span><span className="text-xl font-bold">{prediction.cards?.away_expected?.toFixed(1)}</span></div>
-                    <div className="flex justify-between items-center border-t border-slate-800 pt-2"><span className="text-slate-300">Total</span><span className="text-xl font-bold text-yellow-500">{prediction.cards?.total_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Promedio Local</span><span className="text-lg font-bold">{params.home_cards.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Promedio Visitante</span><span className="text-lg font-bold">{params.away_cards.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center border-t border-slate-800 pt-2"><span className="text-slate-300">Total Partido</span><span className="text-xl font-bold text-yellow-500">{prediction.cards?.expected?.toFixed(1)}</span></div>
                   </CardContent>
                 </Card>
                 <Card className="bg-slate-900 border-slate-800">
                   <CardHeader><CardTitle className="text-slate-100">Over/Under Tarjetas</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
                     {Object.entries(prediction.cards?.over_under || {}).map(([line, probs]: any) => (
-                      <div key={line} className="flex justify-between items-center p-2 bg-slate-950 rounded">
+                      <div key={line} className="flex justify-between items-center p-2 bg-slate-950 rounded border border-slate-800/50">
                         <span className="text-slate-300">Más de {line}</span>
                         <span className="text-blue-400 font-bold">{(probs.over * 100).toFixed(1)}%</span>
                       </div>
@@ -321,15 +345,15 @@ export default function PredictionsView() {
                 <Card className="bg-slate-900 border-slate-800">
                   <CardHeader><CardTitle className="text-blue-400">Remates Local</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center"><span className="text-slate-400">Totales</span><span className="text-xl font-bold">{prediction.shots?.home_shots_expected?.toFixed(1)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-slate-400">A Puerta</span><span className="text-xl font-bold text-green-400">{prediction.shots?.home_on_goal_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Totales</span><span className="text-xl font-bold">{prediction.shots?.home_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">A Puerta (Est.)</span><span className="text-xl font-bold text-green-400">{(prediction.shots?.home_expected * 0.35)?.toFixed(1)}</span></div>
                   </CardContent>
                 </Card>
                 <Card className="bg-slate-900 border-slate-800">
                   <CardHeader><CardTitle className="text-red-400">Remates Visitante</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center"><span className="text-slate-400">Totales</span><span className="text-xl font-bold">{prediction.shots?.away_shots_expected?.toFixed(1)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-slate-400">A Puerta</span><span className="text-xl font-bold text-green-400">{prediction.shots?.away_on_goal_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Totales</span><span className="text-xl font-bold">{prediction.shots?.away_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">A Puerta (Est.)</span><span className="text-xl font-bold text-green-400">{(prediction.shots?.away_expected * 0.35)?.toFixed(1)}</span></div>
                   </CardContent>
                 </Card>
               </div>

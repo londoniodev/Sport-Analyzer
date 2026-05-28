@@ -14,10 +14,21 @@ export default function PlayerBrowserView() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Cargar ligas y equipos iniciales (se simplifica reusando el endpoint de stats)
+    // Cargar ligas iniciales
     fetch('/api/database/stats').then(r => r.json()).then(data => setLeagues(data.leagues || []));
-    fetch('/api/teams').then(r => r.json()).then(data => setTeams(data || []));
   }, []);
+
+  useEffect(() => {
+    // Recargar equipos cuando cambia la liga
+    const url = selectedLeague ? `/api/teams?league_id=${selectedLeague}` : '/api/teams';
+    fetch(url).then(r => r.json()).then(data => {
+      setTeams(data || []);
+      // Reset team selection if the old selected team is not in the new list
+      if (selectedTeam && !data.find((t: any) => t.id === Number(selectedTeam))) {
+        setSelectedTeam('');
+      }
+    });
+  }, [selectedLeague]);
 
   useEffect(() => {
     const fetchPlayers = async () => {

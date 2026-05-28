@@ -76,17 +76,63 @@ export default function RushbetDetailView({ eventId, onBack }: { eventId: string
     );
   }
 
-  const renderMarketOutcomes = (outcomes: any[]) => {
+  const renderMarketOutcomes = (outcomes: any[], marketLabel: string) => {
+    const preds = data?.predictions;
+    const labelLower = marketLabel.toLowerCase();
+    
+    // Detección del tipo de mercado
+    const is1X2 = labelLower.includes('resultado final') || labelLower === '1x2';
+    const isTotalGoals = labelLower.includes('total de goles') && !labelLower.includes('equipo');
+    const isBTTS = labelLower.includes('ambos equipos marcarán') || labelLower.includes('ambos equipos anotan');
+    const isCorners = (labelLower.includes('esquina') || labelLower.includes('corner')) && labelLower.includes('total');
+    const isCards = labelLower.includes('tarjetas') && labelLower.includes('total');
+    const isHandicap = labelLower.includes('hándicap') || labelLower.includes('handicap');
+
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-        {outcomes.map((out: any, idx: number) => (
-          <div key={idx} className="bg-[#121214] border border-slate-800 rounded p-2 flex justify-between items-center hover:border-green-500/50 transition-colors">
-            <span className="text-sm text-slate-300 font-medium truncate pr-2">
-              {out.label} {out.line ? <span className="text-slate-500">({out.line})</span> : ''}
-            </span>
-            <span className="text-green-400 font-mono font-bold">{out.odds.toFixed(2)}</span>
-          </div>
-        ))}
+        {outcomes.map((out: any, idx: number) => {
+          let prob: number | null = null;
+          
+          if (preds) {
+            if (is1X2) {
+               if (out.label === '1') prob = preds['1x2']?.home_win;
+               if (out.label === 'X') prob = preds['1x2']?.draw;
+               if (out.label === '2') prob = preds['1x2']?.away_win;
+            } else if (isTotalGoals && out.line && preds.over_under?.[out.line]) {
+               if (out.label === 'Over' || out.label === 'Más de') prob = preds.over_under[out.line]?.over;
+               if (out.label === 'Under' || out.label === 'Menos de') prob = preds.over_under[out.line]?.under;
+            } else if (isBTTS && preds.btts) {
+               if (out.label === 'Sí' || out.label === 'Yes') prob = preds.btts?.yes;
+               if (out.label === 'No') prob = preds.btts?.no;
+            } else if (isCorners && out.line && preds.corners?.over_under?.[out.line]) {
+               if (out.label === 'Over' || out.label === 'Más de') prob = preds.corners.over_under[out.line]?.over;
+               if (out.label === 'Under' || out.label === 'Menos de') prob = preds.corners.over_under[out.line]?.under;
+            } else if (isCards && out.line && preds.cards?.over_under?.[out.line]) {
+               if (out.label === 'Over' || out.label === 'Más de') prob = preds.cards.over_under[out.line]?.over;
+               if (out.label === 'Under' || out.label === 'Menos de') prob = preds.cards.over_under[out.line]?.under;
+            } else if (isHandicap && out.line && preds.handicaps?.[out.line]) {
+               if (out.label === '1') prob = preds.handicaps[out.line]?.win;
+               if (out.label === '2') prob = preds.handicaps[out.line]?.loss;
+               if (out.label === 'X' || out.label === 'Empate') prob = preds.handicaps[out.line]?.push;
+            }
+          }
+          
+          return (
+            <div key={idx} className="bg-[#121214] border border-slate-800 rounded p-3 flex justify-between items-center hover:border-green-500/50 transition-colors">
+              <div className="flex flex-col">
+                <span className="text-sm text-slate-300 font-medium truncate pr-2">
+                  {out.label} {out.line ? <span className="text-slate-500">({out.line})</span> : ''}
+                </span>
+                {prob !== null && (
+                  <span className="text-xs text-blue-400 font-bold tracking-wide mt-1">
+                    🤖 {(prob * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <span className="text-green-400 font-mono font-bold text-lg">{out.odds.toFixed(2)}</span>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -99,8 +145,9 @@ export default function RushbetDetailView({ eventId, onBack }: { eventId: string
           <ArrowLeft className="w-4 h-4 mr-2" /> Volver
         </Button>
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
             {data.home_team} vs {data.away_team}
+            {data.predictions && <Badge className="bg-blue-600 ml-2">🤖 AI Powered</Badge>}
           </h2>
           <p className="text-slate-400 text-sm mt-1">{data.name}</p>
         </div>
@@ -129,7 +176,7 @@ export default function RushbetDetailView({ eventId, onBack }: { eventId: string
           const catMarkets = data.markets[category] || [];
           if (catMarkets.length === 0) return null;
           
-          const isExpanded = expandedCats[category];
+          const isExpanded = expandedCats[category] ?? false; // Fixed issue where some weren't expanded explicitly
           
           return (
             <Card key={category} className="bg-slate-900 border-slate-800 overflow-hidden">
@@ -151,7 +198,7 @@ export default function RushbetDetailView({ eventId, onBack }: { eventId: string
                       <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-3">
                         {market.label}
                       </h4>
-                      {renderMarketOutcomes(market.outcomes)}
+                      {renderMarketOutcomes(market.outcomes, market.label)}
                     </div>
                   ))}
                 </div>
