@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Activity, Swords, Target, Crosshair, Flag, Presentation } from 'lucide-react';
+import { Activity, Swords, Target, Crosshair, Flag } from 'lucide-react';
 
 export default function PredictionsView() {
-  const [teams, setTeams] = useState([]);
+  const [teams, setTeams] = useState<any[]>([]);
   const [homeId, setHomeId] = useState('');
   const [awayId, setAwayId] = useState('');
   

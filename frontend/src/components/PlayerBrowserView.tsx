@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { useState, useEffect } from 'react';
+import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Search, UserCircle2, Activity } from 'lucide-react';
 
