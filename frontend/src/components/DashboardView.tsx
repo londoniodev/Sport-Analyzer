@@ -159,16 +159,38 @@ export default function DashboardView() {
             <label htmlFor="details" className="text-sm text-slate-400">Incluir Detalles (Alineaciones y stats de jugadores)</label>
           </div>
 
-          <div className="mt-6 flex gap-4">
-            <Button onClick={handleSync} disabled={syncing} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
-              Sincronizar Liga
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button onClick={handleSync} disabled={syncing} className="w-full bg-green-600 hover:bg-green-700 text-white">
+              {syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              {syncing ? 'Sincronizando...' : 'Sincronizar Liga'}
             </Button>
-            <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              Sync Prioritarias (Batch)
+            <Button 
+              onClick={async () => {
+                setSyncing(true);
+                await fetch(`/api/etl/sync-priority?season=${selectedSeason}`, { method: 'POST' });
+                setSyncing(false);
+                alert('Sincronización en lote (Tier 1 y Tier 2) iniciada en segundo plano.');
+              }} 
+              disabled={syncing} 
+              className="w-full bg-slate-800 hover:bg-slate-700 text-white"
+            >
+              Sync Prioritarias
             </Button>
-            <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              Actualizar Lesiones
+            <Button 
+              onClick={async () => {
+                setSyncing(true);
+                await fetch('/api/etl/sync-injuries', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ league_id: parseInt(selectedLeague), season: parseInt(selectedSeason), sync_details: false })
+                });
+                setSyncing(false);
+                alert('Sincronización de lesiones iniciada en segundo plano.');
+              }} 
+              disabled={syncing} 
+              className="w-full bg-slate-800 hover:bg-slate-700 text-white"
+            >
+              Sync Lesiones
             </Button>
           </div>
         </CardContent>

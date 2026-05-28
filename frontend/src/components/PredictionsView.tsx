@@ -16,6 +16,7 @@ export default function PredictionsView() {
 
   const [prediction, setPrediction] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('Goles y Marcador');
 
   useEffect(() => {
     fetch('/api/teams').then(r => r.json()).then(data => {
@@ -186,53 +187,153 @@ export default function PredictionsView() {
             </Card>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="bg-slate-900 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2"><Target className="w-5 h-5 text-green-500" /> Mercado de Goles</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span className="text-slate-300">Ambos Marcan (BTTS)</span>
-                    <Badge className="bg-green-600">{(prediction.btts.yes * 100).toFixed(1)}%</Badge>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span className="text-slate-300">Over 1.5 Goles</span>
-                    <Badge variant="outline" className="text-slate-300 border-slate-700">{(prediction.over_under['1.5'].over * 100).toFixed(1)}%</Badge>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span className="text-slate-300">Over 2.5 Goles</span>
-                    <Badge variant="outline" className="text-slate-300 border-slate-700">{(prediction.over_under['2.5'].over * 100).toFixed(1)}%</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-300">Over 3.5 Goles</span>
-                    <Badge variant="outline" className="text-slate-300 border-slate-700">{(prediction.over_under['3.5'].over * 100).toFixed(1)}%</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="mt-8 border-t border-slate-800 pt-6">
+            <div className="flex gap-2 overflow-x-auto pb-4 mb-4">
+              {['Goles y Marcador', 'Hándicap Asiático', 'Córners', 'Tarjetas', 'Remates'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 font-medium text-sm rounded-full transition-colors whitespace-nowrap ${
+                    activeTab === tab 
+                      ? 'bg-pink-600 text-white' 
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
 
-            <Card className="bg-slate-900 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-slate-100 flex items-center gap-2"><Crosshair className="w-5 h-5 text-purple-500" /> Marcadores Probables</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-5 gap-2">
-                  {Object.entries(prediction.correct_score_top5).map(([score, prob]: any) => (
-                    <div key={score} className="bg-slate-950 border border-slate-800 rounded-md p-2 text-center">
-                      <div className="text-lg font-bold text-slate-200">{score}</div>
-                      <div className="text-xs text-slate-500">{(prob * 100).toFixed(1)}%</div>
+            {activeTab === 'Goles y Marcador' && (
+              <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader>
+                    <CardTitle className="text-slate-100 flex items-center gap-2"><Target className="w-5 h-5 text-green-500" /> Mercado de Goles</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <span className="text-slate-300">Ambos Marcan (BTTS)</span>
+                        <Badge className="bg-green-600">{(prediction.btts.yes * 100).toFixed(1)}%</Badge>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <span className="text-slate-300">Over 1.5 Goles</span>
+                        <Badge variant="outline" className="text-slate-300 border-slate-700">{(prediction.over_under['1.5']?.over * 100).toFixed(1)}%</Badge>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <span className="text-slate-300">Over 2.5 Goles</span>
+                        <Badge variant="outline" className="text-slate-300 border-slate-700">{(prediction.over_under['2.5']?.over * 100).toFixed(1)}%</Badge>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-300">Over 3.5 Goles</span>
+                        <Badge variant="outline" className="text-slate-300 border-slate-700">{(prediction.over_under['3.5']?.over * 100).toFixed(1)}%</Badge>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                
-                <div className="mt-6 border-t border-slate-800 pt-4 flex justify-between items-center">
-                  <span className="text-slate-300 flex items-center gap-2"><Flag className="w-4 h-4" /> Córners Esperados</span>
-                  <span className="text-xl font-bold text-slate-100">{prediction.corners?.expected?.total || '-'}</span>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader>
+                    <CardTitle className="text-slate-100 flex items-center gap-2"><Crosshair className="w-5 h-5 text-purple-500" /> Marcadores Probables</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-5 gap-2">
+                      {Object.entries(prediction.correct_score_top5 || {}).map(([score, prob]: any) => (
+                        <div key={score} className="bg-slate-950 border border-slate-800 rounded-md p-2 text-center">
+                          <div className="text-lg font-bold text-slate-200">{score}</div>
+                          <div className="text-xs text-slate-500">{(prob * 100).toFixed(1)}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {activeTab === 'Hándicap Asiático' && (
+              <Card className="bg-slate-900 border-slate-800 animate-in fade-in duration-300">
+                <CardHeader>
+                  <CardTitle className="text-slate-100 flex items-center gap-2">Hándicap Asiático Principal</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    {Object.entries(prediction.handicaps?.asian_handicaps || {}).map(([line, probs]: any) => (
+                      <div key={line} className="bg-slate-950 border border-slate-800 rounded p-3 flex justify-between items-center">
+                        <span className="text-slate-300 font-bold">{line.replace('home_', 'L ').replace('away_', 'V ')}</span>
+                        <span className="text-blue-400">{(probs.win * 100).toFixed(1)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === 'Córners' && (
+              <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader><CardTitle className="text-slate-100">Córners Esperados</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Local</span><span className="text-xl font-bold">{prediction.corners?.home_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Visitante</span><span className="text-xl font-bold">{prediction.corners?.away_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center border-t border-slate-800 pt-2"><span className="text-slate-300">Total</span><span className="text-xl font-bold text-green-400">{prediction.corners?.total_expected?.toFixed(1)}</span></div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader><CardTitle className="text-slate-100">Over/Under Córners</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(prediction.corners?.over_under || {}).map(([line, probs]: any) => (
+                      <div key={line} className="flex justify-between items-center p-2 bg-slate-950 rounded">
+                        <span className="text-slate-300">Más de {line}</span>
+                        <span className="text-blue-400 font-bold">{(probs.over * 100).toFixed(1)}%</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {activeTab === 'Tarjetas' && (
+              <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader><CardTitle className="text-slate-100">Tarjetas Esperadas</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Local</span><span className="text-xl font-bold">{prediction.cards?.home_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Visitante</span><span className="text-xl font-bold">{prediction.cards?.away_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center border-t border-slate-800 pt-2"><span className="text-slate-300">Total</span><span className="text-xl font-bold text-yellow-500">{prediction.cards?.total_expected?.toFixed(1)}</span></div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader><CardTitle className="text-slate-100">Over/Under Tarjetas</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(prediction.cards?.over_under || {}).map(([line, probs]: any) => (
+                      <div key={line} className="flex justify-between items-center p-2 bg-slate-950 rounded">
+                        <span className="text-slate-300">Más de {line}</span>
+                        <span className="text-blue-400 font-bold">{(probs.over * 100).toFixed(1)}%</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {activeTab === 'Remates' && (
+              <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader><CardTitle className="text-blue-400">Remates Local</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Totales</span><span className="text-xl font-bold">{prediction.shots?.home_shots_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">A Puerta</span><span className="text-xl font-bold text-green-400">{prediction.shots?.home_on_goal_expected?.toFixed(1)}</span></div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-slate-900 border-slate-800">
+                  <CardHeader><CardTitle className="text-red-400">Remates Visitante</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center"><span className="text-slate-400">Totales</span><span className="text-xl font-bold">{prediction.shots?.away_shots_expected?.toFixed(1)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-slate-400">A Puerta</span><span className="text-xl font-bold text-green-400">{prediction.shots?.away_on_goal_expected?.toFixed(1)}</span></div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </div>
       )}

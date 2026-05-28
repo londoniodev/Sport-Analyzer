@@ -88,6 +88,30 @@ def sync_league(req: SyncLeagueRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_sync_task, req.league_id, req.season, req.sync_details)
     return {"message": "Sync started in background", "league_id": req.league_id, "season": req.season}
 
+def run_sync_priority_task(season: int):
+    try:
+        etl = FootballETL()
+        etl.sync_priority_leagues(season=season, sync_details=False)
+    except Exception as e:
+        print(f"Error in background batch sync: {e}")
+
+@app.post("/api/etl/sync-priority")
+def sync_priority(season: int, background_tasks: BackgroundTasks):
+    background_tasks.add_task(run_sync_priority_task, season)
+    return {"message": "Batch sync started in background"}
+
+def run_sync_injuries_task(league_id: int, season: int):
+    try:
+        etl = FootballETL()
+        etl.sync_injuries(league_id=league_id, season=season)
+    except Exception as e:
+        print(f"Error in background injuries sync: {e}")
+
+@app.post("/api/etl/sync-injuries")
+def sync_injuries(req: SyncLeagueRequest, background_tasks: BackgroundTasks):
+    background_tasks.add_task(run_sync_injuries_task, req.league_id, req.season)
+    return {"message": "Injuries sync started in background"}
+
 
 # ==========================================
 # 2. Teams & Players
