@@ -841,7 +841,7 @@ export default function WorldCupView() {
                     </div>
                     {pairs.map((pair, pIdx) => (
                       <div key={pIdx} className="relative flex-1 flex flex-col justify-around min-h-[100px]">
-                        {pair.map((m, mIdx) => {
+                        {pair.map((m) => {
                           if (!m) return null;
                           return (
                             <div key={m.id} className="relative my-2">
