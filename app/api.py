@@ -20,6 +20,7 @@ from app.sports.football.analytics.predictive.goals import (
 )
 from app.sports.football.analytics.predictive.advanced import AdvancedPredictor
 from app.sports.football.analytics.data.team_stats import get_team_stats_summary
+from app.sports.football.config.team_mapping import get_mapped_team_id
 
 app = FastAPI(
     title="Sport Analyzer API",
@@ -285,14 +286,10 @@ def get_rushbet_events():
 def get_rushbet_event_detail(event_id: int, session: Session = Depends(get_session)):
     try:
         client = RushbetClient()
-        detail = client.get_event_detail(event_id)
+        detail = client.get_event_details(event_id)
         if not detail:
             raise HTTPException(status_code=404, detail="Event not found")
             
-        # Intentar obtener las predicciones analíticas
-        from app.sports.football.config.team_mapping import get_mapped_team_id
-        from app.sports.football.analytics.predictive.goals import get_full_match_prediction
-        
         home_team = detail.get("home_team", "")
         away_team = detail.get("away_team", "")
         scraper_home_id = detail.get("home_id")
@@ -301,16 +298,14 @@ def get_rushbet_event_detail(event_id: int, session: Session = Depends(get_sessi
         mapped_home_id = get_mapped_team_id(home_team, session)
         mapped_away_id = get_mapped_team_id(away_team, session)
         
-        home_id = mapped_home_id if mapped_home_id else scraper_home_id
-        away_id = mapped_away_id if mapped_away_id else scraper_away_id
-        
         session.commit() # Commit possible new mappings
         
         detail["predictions"] = None
-        if home_id and away_id:
-            check_stmt = select(Fixture).where((Fixture.home_team_id == home_id) | (Fixture.away_team_id == home_id)).limit(1)
+        # Solo inyectar predicciones si los equipos se mapearon a IDs numéricos de nuestra BD
+        if isinstance(mapped_home_id, int) and isinstance(mapped_away_id, int):
+            check_stmt = select(Fixture).where((Fixture.home_team_id == mapped_home_id) | (Fixture.away_team_id == mapped_home_id)).limit(1)
             if session.exec(check_stmt).first():
-                detail["predictions"] = get_full_match_prediction(home_id, away_id, session)
+                detail["predictions"] = get_full_match_prediction(mapped_home_id, mapped_away_id, session)
         
         return detail
     except Exception as e:

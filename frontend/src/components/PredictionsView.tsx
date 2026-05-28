@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Activity, Swords, Target, Crosshair, Flag } from 'lucide-react';
+import { Activity, Swords, Target, Crosshair } from 'lucide-react';
 
 export default function PredictionsView() {
   const [teams, setTeams] = useState<any[]>([]);
