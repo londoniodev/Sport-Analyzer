@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Activity, Clock, TrendingUp } from 'lucide-react';
+import { Activity, Clock, TrendingUp, ChevronRight } from 'lucide-react';
+import RushbetDetailView from './RushbetDetailView';
 
 export default function RushbetView() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -19,6 +21,10 @@ export default function RushbetView() {
       setLoading(false);
     }
   };
+
+  if (selectedEventId) {
+    return <RushbetDetailView eventId={selectedEventId} onBack={() => setSelectedEventId(null)} />;
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -46,16 +52,17 @@ export default function RushbetView() {
                 <th className="px-6 py-4 text-center">1</th>
                 <th className="px-6 py-4 text-center">X</th>
                 <th className="px-6 py-4 text-center">2</th>
+                <th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500"><Activity className="w-6 h-6 animate-spin mx-auto" /></td></tr>
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500"><Activity className="w-6 h-6 animate-spin mx-auto" /></td></tr>
               ) : events.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">Presiona "Cargar Eventos" para iniciar el web scraper.</td></tr>
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">Presiona "Cargar Eventos" para iniciar el web scraper.</td></tr>
               ) : (
                 events.map((e: any, i) => (
-                  <tr key={e.id || i} className="border-b border-slate-800 hover:bg-slate-800/50">
+                  <tr key={e.id || i} className="border-b border-slate-800 hover:bg-slate-800/50 group cursor-pointer" onClick={() => setSelectedEventId(e.id)}>
                     <td className="px-6 py-4 text-slate-400 flex items-center gap-2">
                       <Clock className="w-3 h-3" /> {new Date(e.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </td>
@@ -67,6 +74,9 @@ export default function RushbetView() {
                     <td className="px-6 py-4 text-center font-mono text-green-400">{e.odds_1?.toFixed(2) || '-'}</td>
                     <td className="px-6 py-4 text-center font-mono text-yellow-400">{e.odds_x?.toFixed(2) || '-'}</td>
                     <td className="px-6 py-4 text-center font-mono text-red-400">{e.odds_2?.toFixed(2) || '-'}</td>
+                    <td className="px-6 py-4 text-right">
+                      <ChevronRight className="w-5 h-5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
+                    </td>
                   </tr>
                 ))
               )}
