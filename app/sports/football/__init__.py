@@ -12,10 +12,6 @@ from app.sports.football.models import (
 from app.sports.football.api import FootballAPIClient
 from app.sports.football.etl import FootballETL
 from app.sports.football.analytics import FootballAnalytics
-from app.sports.football.ui.dashboard import show_dashboard
-from app.sports.football.ui.prediction_view import show_prediction_view
-from app.sports.football.ui.rushbet_view import show_rushbet_view
-from app.sports.football.ui.player_browser import show_player_browser
 
 # Register this sport
 register_sport(SportConfig(
@@ -27,10 +23,11 @@ register_sport(SportConfig(
     analytics_class=FootballAnalytics,
     models=[League, Team, Player, Coach, Fixture, TeamMatchStats, PlayerMatchStats, PlayerSeasonStats, Injury],
     betting_markets=None,  # TODO: Implement betting markets
-    ui_views={
-        "dashboard": show_dashboard,
-        "prediction": show_prediction_view,
-        "live_odds": show_rushbet_view,
-        "players": show_player_browser,
-    }
+    # Removing UI mapping since we migrated to React/FastAPI
+    # "ui_modules": {
+    #     "Dashboard": show_dashboard,
+    #     "Predictions": show_prediction_view,
+    #     "Rushbet Value": show_rushbet_view,
+    #     "Player Stats": show_player_browser
+    # }
 ))
