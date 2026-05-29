@@ -59,6 +59,53 @@ def get_team_elo_rating(team_id: int, session: Session) -> float:
     return 1500.0
 
 
+def get_h2h_modifier(home_team_id: int, away_team_id: int, session: Session, max_adjustment: float = 0.15) -> float:
+    """
+    Calculates a Head-to-Head (H2H) multiplier based on historical matchups.
+    If home_team historically dominates away_team, returns a value > 1.0 (e.g., 1.15).
+    If away_team dominates, returns a value < 1.0 (e.g., 0.85).
+    Returns exactly 1.0 if there is no history or history is perfectly even.
+    """
+    statement = (
+        select(Fixture)
+        .where(
+            ((Fixture.home_team_id == home_team_id) & (Fixture.away_team_id == away_team_id)) |
+            ((Fixture.home_team_id == away_team_id) & (Fixture.away_team_id == home_team_id))
+        )
+        .where(Fixture.home_score != None)
+    )
+    history = session.exec(statement).all()
+    
+    total_matches = len(history)
+    if total_matches == 0:
+        return 1.0
+        
+    home_points = 0.0
+    for match in history:
+        # Determine who won
+        if match.home_team_id == home_team_id:
+            if match.home_score > match.away_score: home_points += 1.0
+            elif match.home_score == match.away_score: home_points += 0.5
+        else:
+            if match.away_score > match.home_score: home_points += 1.0
+            elif match.away_score == match.home_score: home_points += 0.5
+            
+    # Win rate from home_team's perspective (0.0 to 1.0)
+    win_rate = home_points / total_matches
+    
+    # Calculate base modifier: shift 0.5 to 0, multiply by double the max adjustment
+    # If win_rate is 1.0 (100% wins), diff is +0.5 * 2 * max_adj = +max_adj
+    # If win_rate is 0.0 (0% wins), diff is -0.5 * 2 * max_adj = -max_adj
+    raw_adjustment = (win_rate - 0.5) * 2 * max_adjustment
+    
+    # Scale down effect if there are very few matches (confidence factor)
+    # E.g., 1 match = 33% effect, 2 matches = 66% effect, >=3 matches = 100% effect
+    confidence = min(1.0, total_matches / 3.0)
+    
+    final_modifier = 1.0 + (raw_adjustment * confidence)
+    return final_modifier
+
+
 def get_team_corners_avg(team_id: int, last_n_games: int, session: Session) -> float:
     """
     Calculate the average corners for a team in the last N games.

@@ -8,7 +8,8 @@ from app.sports.football.analytics.data.team_stats import (
     get_team_goals_avg,
     get_team_goals_conceded_avg,
     get_team_squad_rating,
-    get_team_elo_rating
+    get_team_elo_rating,
+    get_h2h_modifier
 )
 
 def calculate_expected_goals(
@@ -50,6 +51,14 @@ def calculate_expected_goals(
     else:
         home_xg = home_xg_base
         away_xg = away_xg_base
+        
+    # 4. Apply Head-to-Head (H2H) Modifier (Max +/- 15%)
+    h2h_modifier = get_h2h_modifier(home_team_id, away_team_id, session, max_adjustment=0.15)
+    
+    # If home dominates historically (modifier > 1.0), home_xg increases and away_xg decreases
+    # If away dominates historically (modifier < 1.0), home_xg decreases and away_xg increases
+    home_xg = home_xg * h2h_modifier
+    away_xg = away_xg / h2h_modifier
         
     return home_xg, away_xg, home_elo, away_elo
 
