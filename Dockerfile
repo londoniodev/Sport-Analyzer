@@ -60,8 +60,9 @@ ENV PATH=/root/.local/bin:$PATH
 # Copiar el frontend compilado
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Copiar el backend de Python
+# Copiar el backend de Python y scripts de utilidad
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 
 # Exponer el puerto de la API y Frontend (FastAPI)
 EXPOSE 8000
@@ -70,5 +71,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/ || exit 1
 
-# Lanzar FastAPI
-CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Lanzar migraciones previas y luego FastAPI
+CMD python scripts/apply_migrations.py && uvicorn app.api:app --host 0.0.0.0 --port 8000
