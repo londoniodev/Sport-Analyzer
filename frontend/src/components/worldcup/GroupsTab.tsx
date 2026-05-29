@@ -1,6 +1,6 @@
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
-import { Zap, RefreshCw } from 'lucide-react';
+import { Zap, RefreshCw, ArrowRight } from 'lucide-react';
 
 export default function GroupsTab({ state }: { state: any }) {
   const { groups, simulatingGroupsProgress, simulateGroupStage, generateBracketFromGroups } = state;
@@ -12,10 +12,19 @@ export default function GroupsTab({ state }: { state: any }) {
           <h3 className="text-xl font-bold text-[#f3e5ab]">Simulador Fase de Grupos</h3>
           <p className="text-sm text-slate-400">Juega los 72 partidos matemáticamente (Distribución de Poisson)</p>
         </div>
-        <Button onClick={simulateGroupStage} disabled={simulatingGroupsProgress !== null} className="bg-[#d4af37] hover:bg-[#c9a520] text-black font-bold">
-          {simulatingGroupsProgress ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
-          {simulatingGroupsProgress ? 'Simulando...' : 'Simular Todos los Grupos'}
-        </Button>
+        <div className="flex flex-wrap gap-3 items-center">
+          <Button onClick={simulateGroupStage} disabled={simulatingGroupsProgress !== null} className="bg-[#d4af37] hover:bg-[#c9a520] text-black font-bold whitespace-nowrap">
+            {simulatingGroupsProgress ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+            {simulatingGroupsProgress ? 'Simulando...' : 'Simular Todos los Grupos'}
+          </Button>
+          
+          {!simulatingGroupsProgress && groups[0].teams[0].played > 0 && (
+            <Button onClick={generateBracketFromGroups} className="bg-green-600 hover:bg-green-500 text-white font-bold shadow-[0_0_15px_rgba(22,163,74,0.5)] animate-pulse whitespace-nowrap">
+              <span>Continuar a Eliminatorias</span>
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {simulatingGroupsProgress && (
@@ -29,15 +38,7 @@ export default function GroupsTab({ state }: { state: any }) {
         </Card>
       )}
 
-      {!simulatingGroupsProgress && groups[0].teams[0].played > 0 && (
-        <div className="flex justify-center mb-8">
-          <Button onClick={generateBracketFromGroups} className="bg-green-600 hover:bg-green-500 text-white font-bold px-8 py-6 text-lg shadow-[0_0_20px_rgba(22,163,74,0.4)] animate-pulse">
-            Continuar a Eliminatorias (Bracket) ➡️
-          </Button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {groups.map((group: any) => (
           <Card key={group.name} className="bg-slate-900 border-slate-800 overflow-hidden">
             <div className="bg-slate-950 px-4 py-2 border-b border-slate-800">
