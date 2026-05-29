@@ -10,6 +10,23 @@ export const getFlag = (teamName: string) => {
   return '🏳️';
 };
 
+// Pick a random score based on its probability
+export const getWeightedRandomScore = (topScores: [string, any][]): string => {
+  if (!topScores || topScores.length === 0) return '0-0';
+  
+  // Normalize probabilities in case they don't sum to 100%
+  const totalProb = topScores.reduce((acc, curr) => acc + (curr[1] as number), 0);
+  let rand = Math.random() * totalProb;
+  let sum = 0;
+  
+  for (const [score, prob] of topScores) {
+    sum += (prob as number);
+    if (rand <= sum) return score;
+  }
+  
+  return topScores[0][0] as string;
+};
+
 export const getOdds = (prob: number) => {
   if (!prob || prob <= 0) return '-';
   return (1 / prob).toFixed(2);

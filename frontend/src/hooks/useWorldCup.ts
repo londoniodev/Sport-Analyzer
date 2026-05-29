@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { worldCupGroups } from '../lib/worldCupData';
 import type { SyncStatus, WCFixture, Prediction, BracketMatch } from '../components/worldcup/types';
-import { generateInitialBracket } from '../components/worldcup/utils';
+import { generateInitialBracket, getWeightedRandomScore } from '../components/worldcup/utils';
 
 export function useWorldCup() {
   const [activeTab, setActiveTab] = useState<'groups' | 'fixtures' | 'predictions' | 'bracket'>('groups');
@@ -80,8 +80,8 @@ export function useWorldCup() {
                const data = await res.json();
                const topScores = Object.entries(data.correct_score_top5);
                if (topScores && topScores.length > 0) {
-                   const mostLikelyScoreStr = topScores[0][0] as string;
-                   const [homeScore, awayScore] = mostLikelyScoreStr.split('-').map(Number);
+                   const chosenScoreStr = getWeightedRandomScore(topScores);
+                   const [homeScore, awayScore] = chosenScoreStr.split('-').map(Number);
                    
                    teamHome.played += 1;
                    teamAway.played += 1;
@@ -191,8 +191,8 @@ export function useWorldCup() {
       const data = await res.json();
       const topScores = Object.entries(data.correct_score_top5);
       if (topScores && topScores.length > 0) {
-        let mostLikelyScoreStr = topScores[0][0] as string;
-        let [homeScore, awayScore] = mostLikelyScoreStr.split('-').map(Number);
+        let chosenScoreStr = getWeightedRandomScore(topScores);
+        let [homeScore, awayScore] = chosenScoreStr.split('-').map(Number);
         if (homeScore === awayScore) {
           const home1x2 = data['1x2'].home_win;
           const away1x2 = data['1x2'].away_win;
