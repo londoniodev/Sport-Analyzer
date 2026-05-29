@@ -14,9 +14,13 @@ WIKI_URL = "https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_squads"
 
 def scrape_squads(session: Session):
     print(f"Descargando datos de {WIKI_URL}...")
-    response = requests.get(WIKI_URL)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    }
+    response = requests.get(WIKI_URL, headers=headers)
     if response.status_code != 200:
-        print("Error descargando la página")
+        print(f"Error descargando la página. Status code: {response.status_code}")
         return
     
     soup = BeautifulSoup(response.text, 'html.parser')
