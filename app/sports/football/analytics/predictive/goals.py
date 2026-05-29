@@ -7,7 +7,8 @@ from app.sports.football.analytics.models.poisson import PoissonEngine
 from app.sports.football.analytics.data.team_stats import (
     get_team_goals_avg,
     get_team_goals_conceded_avg,
-    get_team_squad_rating
+    get_team_squad_rating,
+    get_team_elo_rating
 )
 
 def calculate_expected_goals(
@@ -28,23 +29,29 @@ def calculate_expected_goals(
     home_xg_base = ((home_attack + away_defense) / 2) * home_advantage
     away_xg_base = (away_attack + home_defense) / 2
     
-    # 2. Get Squad Ratings (Micro-Stats)
-    home_squad_rating = get_team_squad_rating(home_team_id, last_n_games, session)
-    away_squad_rating = get_team_squad_rating(away_team_id, last_n_games, session)
+    # 2. Get Elo Ratings (Micro-Stats)
+    home_elo = get_team_elo_rating(home_team_id, session)
+    away_elo = get_team_elo_rating(away_team_id, session)
     
-    # 3. Calculate Quality Modifier (Max 15% adjustment)
-    if home_squad_rating > 0 and away_squad_rating > 0:
-        ratio = home_squad_rating / away_squad_rating
-        # Cap ratio between 0.85 and 1.15 to prevent extreme distortions
-        quality_modifier = max(0.85, min(ratio, 1.15))
-        
+    # 3. Calculate Quality Modifier (Elo Difference)
+    # A standard Elo difference of 100 points roughly translates to a 64% win probability for the stronger team.
+    # We will adjust the xG multiplier based on the Elo difference.
+    # Every 100 points difference adds/subtracts ~5-10% to the xG.
+    
+    elo_diff = home_elo - away_elo
+    quality_modifier = 1.0 + (elo_diff / 1000.0) # E.g., +100 elo diff = 1.1 multiplier
+    
+    # Cap ratio between 0.70 and 1.30 to prevent extreme distortions
+    quality_modifier = max(0.70, min(quality_modifier, 1.30))
+    
+    if home_elo > 0 and away_elo > 0:
         home_xg = home_xg_base * quality_modifier
         away_xg = away_xg_base / quality_modifier
     else:
         home_xg = home_xg_base
         away_xg = away_xg_base
         
-    return home_xg, away_xg, home_squad_rating, away_squad_rating
+    return home_xg, away_xg, home_elo, away_elo
 
 def predict_goals_markets(home_xg: float, away_xg: float, max_goals: int = 6, rho: float = 0.1) -> Dict:
     """Predice mercados principales de goles (1X2, Over/Under, BTTS)."""

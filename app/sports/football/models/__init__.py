@@ -25,6 +25,7 @@ class Team(SQLModel, table=True):
     
     id: int = Field(primary_key=True)
     name: str
+    elo_rating: Optional[float] = None
 
 
 class Player(SQLModel, table=True):
@@ -89,6 +90,7 @@ class TeamMatchStats(SQLModel, table=True):
     possession: Optional[int] = None
     shots_on_goal: Optional[int] = None
     total_shots: Optional[int] = None
+    expected_goals: Optional[float] = None
     corner_kicks: Optional[int] = None
     fouls: Optional[int] = None
     yellow_cards: Optional[int] = None

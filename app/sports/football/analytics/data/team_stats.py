@@ -48,6 +48,17 @@ def get_team_squad_rating(team_id: int, last_n_games: int, session: Session) -> 
     return total_rating / len(results)
 
 
+def get_team_elo_rating(team_id: int, session: Session) -> float:
+    """
+    Returns the team's Elo rating. Defaults to 1500 if not found.
+    """
+    from app.sports.football.models import Team
+    team = session.exec(select(Team).where(Team.id == team_id)).first()
+    if team and team.elo_rating is not None:
+        return team.elo_rating
+    return 1500.0
+
+
 def get_team_corners_avg(team_id: int, last_n_games: int, session: Session) -> float:
     """
     Calculate the average corners for a team in the last N games.
@@ -194,24 +205,28 @@ def get_team_goals_avg(team_id: int, last_n_games: int, session: Session, use_we
     Calcula el promedio de goles anotados por el equipo en los últimos N partidos.
     Si use_weighted=True, usa Media Ponderada Exponencial (EWMA).
     """
-    fixtures = (
-        select(Fixture)
+    statement = (
+        select(Fixture, TeamMatchStats)
+        .join(TeamMatchStats, (TeamMatchStats.fixture_id == Fixture.id) & (TeamMatchStats.team_id == team_id))
         .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
-        .where(Fixture.home_score != None)  # Solo partidos jugados
+        .where(Fixture.home_score != None)
         .order_by(Fixture.date.desc())
         .limit(last_n_games)
     )
-    results = session.exec(fixtures).all()
+    results = session.exec(statement).all()
     
     if not results:
         return 0.0
     
     goals_list = []
-    for f in results:
-        if f.home_team_id == team_id:
-            goals_list.append(f.home_score or 0)
+    for f, stats in results:
+        if stats and stats.expected_goals is not None:
+            goals_list.append(stats.expected_goals)
         else:
-            goals_list.append(f.away_score or 0)
+            if f.home_team_id == team_id:
+                goals_list.append(f.home_score or 0)
+            else:
+                goals_list.append(f.away_score or 0)
     
     if use_weighted:
         return calculate_dynamic_weighted_avg(goals_list, alpha)
@@ -224,24 +239,29 @@ def get_team_goals_conceded_avg(team_id: int, last_n_games: int, session: Sessio
     Calcula el promedio de goles recibidos por el equipo en los últimos N partidos.
     Si use_weighted=True, usa Media Ponderada Exponencial (EWMA).
     """
-    fixtures = (
-        select(Fixture)
+    # Para los concedidos, buscamos las estadísticas del RIVAL
+    statement = (
+        select(Fixture, TeamMatchStats)
+        .join(TeamMatchStats, (TeamMatchStats.fixture_id == Fixture.id) & (TeamMatchStats.team_id != team_id))
         .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
         .where(Fixture.home_score != None)
         .order_by(Fixture.date.desc())
         .limit(last_n_games)
     )
-    results = session.exec(fixtures).all()
+    results = session.exec(statement).all()
     
     if not results:
         return 0.0
     
     conceded_list = []
-    for f in results:
-        if f.home_team_id == team_id:
-            conceded_list.append(f.away_score or 0)
+    for f, stats in results:
+        if stats and stats.expected_goals is not None:
+            conceded_list.append(stats.expected_goals)
         else:
-            conceded_list.append(f.home_score or 0)
+            if f.home_team_id == team_id:
+                conceded_list.append(f.away_score or 0)
+            else:
+                conceded_list.append(f.home_score or 0)
     
     if use_weighted:
         return calculate_dynamic_weighted_avg(conceded_list, alpha)
