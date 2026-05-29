@@ -30,7 +30,7 @@ export default function MatchStatsModal({ state }: { state: any }) {
               <span>{getFlag(selectedMatchModal.awayName)}</span>
             </div>
           </div>
-          <Button size="icon" variant="ghost" onClick={() => setSelectedMatchModal(null)} className="text-slate-400 hover:text-white rounded-full">
+          <Button size={"icon" as any} variant={"ghost" as any} onClick={() => setSelectedMatchModal(null)} className="text-slate-400 hover:text-white rounded-full">
             <X className="w-6 h-6" />
           </Button>
         </div>
@@ -52,7 +52,7 @@ export default function MatchStatsModal({ state }: { state: any }) {
                   <div className="bg-slate-800/50 p-3 border-b border-slate-800">
                     <h3 className="font-bold text-slate-300 flex justify-between items-center text-sm">
                       <span>Ganador del Partido (1X2)</span>
-                      <Badge variant="outline" className="text-[#d4af37] border-[#d4af37]/30 bg-[#d4af37]/10">Mercado Principal</Badge>
+                      <Badge variant={"outline" as any} className="text-[#d4af37] border-[#d4af37]/30 bg-[#d4af37]/10">Mercado Principal</Badge>
                     </h3>
                   </div>
                   <div className="p-4 grid grid-cols-3 gap-3">

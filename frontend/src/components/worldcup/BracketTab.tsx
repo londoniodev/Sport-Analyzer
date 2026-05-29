@@ -20,17 +20,17 @@ export default function BracketTab({ state }: { state: any }) {
         <div className="flex items-center gap-6">
           {/* Zoom Controls */}
           <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setBracketZoom((z: number) => Math.max(0.3, z - 0.1))}>
+            <Button size={"icon" as any} variant={"ghost" as any} className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setBracketZoom((z: number) => Math.max(0.3, z - 0.1))}>
               <ZoomOut className="w-4 h-4" />
             </Button>
             <span className="text-xs font-mono w-10 text-center text-slate-300">{Math.round(bracketZoom * 100)}%</span>
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setBracketZoom((z: number) => Math.min(1.5, z + 0.1))}>
+            <Button size={"icon" as any} variant={"ghost" as any} className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setBracketZoom((z: number) => Math.min(1.5, z + 0.1))}>
               <ZoomIn className="w-4 h-4" />
             </Button>
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={generateBracketFromGroups} variant="outline" className="border-slate-700 hover:bg-slate-800 h-10">
+            <Button onClick={generateBracketFromGroups} variant={"outline" as any} className="border-slate-700 hover:bg-slate-800 h-10">
               <RefreshCw className="w-4 h-4 mr-2" /> Reiniciar
             </Button>
             <Button onClick={handleSimulateAll} disabled={simulatingAll} className="bg-[#d4af37] hover:bg-[#c9a520] text-black font-bold h-10 shadow-[0_0_15px_rgba(212,175,55,0.4)]">
@@ -88,10 +88,10 @@ export default function BracketTab({ state }: { state: any }) {
                             {/* Simulate Overlay Button */}
                             {!m.winner && m.home_team && m.away_team && (
                               <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1 opacity-0 hover:opacity-100 transition-opacity">
-                                <Button size="sm" onClick={() => handleSimulateSingle(m.id)} disabled={simulatingBracket === m.id} className="bg-[#d4af37]/20 hover:bg-[#d4af37]/40 text-[#d4af37] border border-[#d4af37]/50 h-6 text-[10px] px-2 py-0 w-[80%]">
+                                <Button size={"sm" as any} onClick={() => handleSimulateSingle(m.id)} disabled={simulatingBracket === m.id} className="bg-[#d4af37]/20 hover:bg-[#d4af37]/40 text-[#d4af37] border border-[#d4af37]/50 h-6 text-[10px] px-2 py-0 w-[80%]">
                                   {simulatingBracket === m.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : '⚡ Simular'}
                                 </Button>
-                                <Button size="sm" onClick={() => openMatchStatsModal(m.id, m.home_team.apiId, m.away_team.apiId, m.home_team.name, m.away_team.name)} className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 border border-blue-500/50 h-6 text-[10px] px-2 py-0 w-[80%]">
+                                <Button size={"sm" as any} onClick={() => openMatchStatsModal(m.id, m.home_team.apiId, m.away_team.apiId, m.home_team.name, m.away_team.name)} className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 border border-blue-500/50 h-6 text-[10px] px-2 py-0 w-[80%]">
                                   📊 Cuotas
                                 </Button>
                               </div>

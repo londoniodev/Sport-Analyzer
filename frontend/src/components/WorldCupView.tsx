@@ -51,7 +51,7 @@ export default function WorldCupView() {
             </Button>
           )}
           {state.syncStatus && !state.syncStatus.running && state.syncStatus.errors.length > 0 && (
-            <Badge variant="destructive" className="text-[10px]">
+            <Badge variant={"destructive" as any} className="text-[10px]">
               {state.syncStatus.errors.length} errores
             </Badge>
           )}
