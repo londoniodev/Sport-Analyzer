@@ -45,10 +45,15 @@ export default function WorldCupView() {
               </div>
             </div>
           ) : (
-            <Button onClick={state.startSync} disabled={state.syncing} className="bg-[#d4af37]/20 hover:bg-[#d4af37]/30 text-[#d4af37] border border-[#d4af37]/30 font-bold shadow-[0_0_15px_rgba(212,175,55,0.15)]">
-              {state.syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-              {state.syncing ? 'Sincronizando...' : 'Descargar Data del Mundial'}
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={state.startDataSync} className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs">
+                Actualizar Elos y Plantillas
+              </Button>
+              <Button onClick={state.startSync} disabled={state.syncing} className="bg-[#d4af37]/20 hover:bg-[#d4af37]/30 text-[#d4af37] border border-[#d4af37]/30 font-bold shadow-[0_0_15px_rgba(212,175,55,0.15)]">
+                {state.syncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                {state.syncing ? 'Sincronizando...' : 'Descargar Data del Mundial'}
+              </Button>
+            </div>
           )}
           {state.syncStatus && !state.syncStatus.running && state.syncStatus.errors.length > 0 && (
             <Badge variant={"destructive" as any} className="text-[10px]">

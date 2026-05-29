@@ -405,12 +405,81 @@ def get_worldcup_fixtures(session: Session = Depends(get_session)):
 
 @app.get("/api/worldcup/predict/{home_id}/{away_id}")
 def predict_worldcup_match(home_id: int, away_id: int, session: Session = Depends(get_session)):
-    """Predicción automática para un enfrentamiento del Mundial usando data histórica."""
+    """Predice un partido del mundial usando la misma lógica que el engine, pero como endpoint suelto."""
     try:
-        prediction = get_full_match_prediction(home_id, away_id, session)
-        return prediction
+        from app.sports.football.analytics.predictive.goals import calculate_expected_goals
+        from app.sports.football.analytics.models.poisson import PoissonEngine
+        import math
+        
+        # Base Poisson Calculation
+        home_xg, away_xg, home_squad, away_squad = calculate_expected_goals(
+            home_team_id=home_id, 
+            away_team_id=away_id, 
+            session=session, 
+            last_n_games=20, 
+            home_advantage=1.0, # Sede neutral
+            use_weighted=True
+        )
+        
+        # Build score matrix
+        max_goals = 6
+        correct_scores = {}
+        home_win_prob = 0.0
+        away_win_prob = 0.0
+        draw_prob = 0.0
+        
+        for h in range(max_goals + 1):
+            for a in range(max_goals + 1):
+                prob = PoissonEngine.get_joint_probability(home_xg, h, away_xg, a)
+                score_str = f"{h}-{a}"
+                correct_scores[score_str] = prob
+                
+                if h > a:
+                    home_win_prob += prob
+                elif a > h:
+                    away_win_prob += prob
+                else:
+                    draw_prob += prob
+
+        # Sort top scores
+        top_scores = dict(sorted(correct_scores.items(), key=lambda item: item[1], reverse=True)[:5])
+
+        return {
+            "probabilities": {
+                "home": home_win_prob,
+                "draw": draw_prob,
+                "away": away_win_prob
+            },
+            "expected_goals": {
+                "home": home_xg,
+                "away": away_xg
+            },
+            "squad_rating": {
+                "home": home_squad,
+                "away": away_squad
+            },
+            "correct_score_top5": top_scores
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/worldcup/sync-data")
+def sync_worldcup_data(background_tasks: BackgroundTasks):
+    """Sincroniza los squads desde Wikipedia y los puntos Elo."""
+    from scripts.import_elo import import_elo_ratings
+    from scripts.import_squads import scrape_squads
+    from app.core.database import Session, engine
+
+    def run_sync():
+        with Session(engine) as session:
+            try:
+                import_elo_ratings(session)
+                scrape_squads(session)
+            except Exception as e:
+                print("Error syncing world cup data:", e)
+
+    background_tasks.add_task(run_sync)
+    return {"status": "ok", "message": "Sincronización de datos del Mundial (Elo y Convocatorias) iniciada en segundo plano."}
 
 class ScorePredictionRequest(BaseModel):
     fixture_id: int

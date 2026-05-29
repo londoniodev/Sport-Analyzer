@@ -61,6 +61,18 @@ export function useWorldCup() {
     }
   };
 
+  const startDataSync = async () => {
+    try {
+      alert("Iniciando sincronización de plantillas (Wikipedia) y puntos Elo. Esto ocurrirá en segundo plano en el servidor.");
+      const res = await fetch('/api/worldcup/sync-data', { method: 'POST' });
+      const data = await res.json();
+      console.log(data);
+    } catch (e) {
+      console.error(e);
+      alert("Error al intentar sincronizar los datos.");
+    }
+  };
+
   const simulateGroupStage = async () => {
     setSimulatingGroupsProgress({ current: 0, total: 72, message: 'Preparando calendarios...' });
     const updatedGroups = JSON.parse(JSON.stringify(groups));
@@ -234,7 +246,7 @@ export function useWorldCup() {
 
   return {
     activeTab, setActiveTab,
-    syncStatus, syncing, startSync,
+    syncStatus, syncing, startSync, startDataSync,
     groups, setGroups, simulatingGroupsProgress, simulateGroupStage, generateBracketFromGroups,
     fixtures, loadingFixtures, loadFixtures,
     predictions, totalPoints, fetchPredictions,
