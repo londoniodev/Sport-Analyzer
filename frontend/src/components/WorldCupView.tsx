@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Card, CardHeader, CardTitle } from './ui/card';
+import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Download, RefreshCw } from 'lucide-react';

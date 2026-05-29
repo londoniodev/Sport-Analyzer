@@ -1,4 +1,4 @@
-import { Team } from '../../lib/worldCupData';
+import type { Team } from '../../lib/worldCupData';
 
 export interface SyncStatus {
   running: boolean;

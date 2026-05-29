@@ -1,5 +1,5 @@
-import { Team, worldCupGroups } from '../../lib/worldCupData';
-import { BracketMatch } from './types';
+import { worldCupGroups } from '../../lib/worldCupData';
+import type { BracketMatch } from './types';
 
 // Get team flag or default
 export const getFlag = (teamName: string) => {

@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { worldCupGroups } from '../../lib/worldCupData';
-import { SyncStatus, WCFixture, Prediction, BracketMatch } from '../components/worldcup/types';
+import { useState } from 'react';
+import { worldCupGroups } from '../lib/worldCupData';
+import type { SyncStatus, WCFixture, Prediction, BracketMatch } from '../components/worldcup/types';
 import { generateInitialBracket } from '../components/worldcup/utils';
 
 export function useWorldCup() {
@@ -12,9 +12,9 @@ export function useWorldCup() {
 
   // Group Simulation State
   const [groups, setGroups] = useState(() => 
-    worldCupGroups.map(g => ({
+    worldCupGroups.map((g: any) => ({
       ...g,
-      teams: g.teams.map(t => ({ ...t, played: 0, pts: 0, gf: 0, ga: 0, gd: 0 }))
+      teams: g.teams.map((t: any) => ({ ...t, played: 0, pts: 0, gf: 0, ga: 0, gd: 0 }))
     }))
   );
   const [simulatingGroupsProgress, setSimulatingGroupsProgress] = useState<{current: number, total: number, message: string} | null>(null);
@@ -162,9 +162,9 @@ export function useWorldCup() {
   };
 
   const generateBracketFromGroups = () => {
-    const firsts = groups.map(g => g.teams[0]);
-    const seconds = groups.map(g => g.teams[1]);
-    const allThirds = groups.map(g => g.teams[2]);
+    const firsts = groups.map((g: any) => g.teams[0]);
+    const seconds = groups.map((g: any) => g.teams[1]);
+    const allThirds = groups.map((g: any) => g.teams[2]);
     allThirds.sort((a: any, b: any) => {
         if (b.pts !== a.pts) return b.pts - a.pts;
         if (b.gd !== a.gd) return b.gd - a.gd;
