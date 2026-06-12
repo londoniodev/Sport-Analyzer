@@ -21,24 +21,40 @@ def calculate_expected_goals(
     use_weighted: bool = True
 ) -> Tuple[float, float, float, float]:
     """Calcula los goles esperados (xG) para los dos equipos integrando el Squad Rating."""
-    home_attack = get_team_goals_avg(home_team_id, last_n_games, session, use_weighted=use_weighted)
-    away_attack = get_team_goals_avg(away_team_id, last_n_games, session, use_weighted=use_weighted)
-    home_defense = get_team_goals_conceded_avg(home_team_id, last_n_games, session, use_weighted=use_weighted)
-    away_defense = get_team_goals_conceded_avg(away_team_id, last_n_games, session, use_weighted=use_weighted)
+    home_attack = 1.3
+    away_attack = 1.1
+    home_defense = 1.1
+    away_defense = 1.3
+    home_elo = 1500.0
+    away_elo = 1500.0
+    h2h_modifier = 1.0
+
+    if session is not None:
+        try:
+            db_home_attack = get_team_goals_avg(home_team_id, last_n_games, session, use_weighted=use_weighted)
+            db_away_attack = get_team_goals_avg(away_team_id, last_n_games, session, use_weighted=use_weighted)
+            db_home_defense = get_team_goals_conceded_avg(home_team_id, last_n_games, session, use_weighted=use_weighted)
+            db_away_defense = get_team_goals_conceded_avg(away_team_id, last_n_games, session, use_weighted=use_weighted)
+            
+            if db_home_attack > 0.0: home_attack = db_home_attack
+            if db_away_attack > 0.0: away_attack = db_away_attack
+            if db_home_defense > 0.0: home_defense = db_home_defense
+            if db_away_defense > 0.0: away_defense = db_away_defense
+            
+            db_home_elo = get_team_elo_rating(home_team_id, session)
+            db_away_elo = get_team_elo_rating(away_team_id, session)
+            if db_home_elo > 0: home_elo = db_home_elo
+            if db_away_elo > 0: away_elo = db_away_elo
+            
+            h2h_modifier = get_h2h_modifier(home_team_id, away_team_id, session, max_adjustment=0.15)
+        except Exception:
+            pass
     
     # 1. Base xG calculation (Macro-Stats)
     home_xg_base = ((home_attack + away_defense) / 2) * home_advantage
     away_xg_base = (away_attack + home_defense) / 2
     
-    # 2. Get Elo Ratings (Micro-Stats)
-    home_elo = get_team_elo_rating(home_team_id, session)
-    away_elo = get_team_elo_rating(away_team_id, session)
-    
     # 3. Calculate Quality Modifier (Elo Difference)
-    # A standard Elo difference of 100 points roughly translates to a 64% win probability for the stronger team.
-    # We will adjust the xG multiplier based on the Elo difference.
-    # Every 100 points difference adds/subtracts ~5-10% to the xG.
-    
     elo_diff = home_elo - away_elo
     quality_modifier = 1.0 + (elo_diff / 1000.0) # E.g., +100 elo diff = 1.1 multiplier
     
@@ -53,10 +69,6 @@ def calculate_expected_goals(
         away_xg = away_xg_base
         
     # 4. Apply Head-to-Head (H2H) Modifier (Max +/- 15%)
-    h2h_modifier = get_h2h_modifier(home_team_id, away_team_id, session, max_adjustment=0.15)
-    
-    # If home dominates historically (modifier > 1.0), home_xg increases and away_xg decreases
-    # If away dominates historically (modifier < 1.0), home_xg decreases and away_xg increases
     home_xg = home_xg * h2h_modifier
     away_xg = away_xg / h2h_modifier
         
