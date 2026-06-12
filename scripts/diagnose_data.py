@@ -7,15 +7,23 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app.core.database import engine, _demo_mode
 from app.sports.football.models import Team, Fixture, Player
 
+from app.sports.football.analytics.worldcup_scoring import WORLD_CUP_TEAM_IDS
+
 def run_diagnostics(session: Session):
     print("=========================================")
     print("   DIAGNÓSTICO DE DATOS DEL MUNDIAL")
     print("=========================================\n")
     
-    # 1. Obtener todos los equipos (Selecciones)
-    teams = session.exec(select(Team).order_by(Team.name)).all()
+    # 1. Obtener los equipos del Mundial que están en la DB
+    teams = session.exec(select(Team).where(Team.id.in_(WORLD_CUP_TEAM_IDS)).order_by(Team.name)).all()
     
-    print(f"Total de equipos evaluados: {len(teams)}\n")
+    found_ids = {t.id for t in teams}
+    missing_from_db = [tid for tid in WORLD_CUP_TEAM_IDS if tid not in found_ids]
+    
+    print(f"Total de selecciones del Mundial encontradas en DB: {len(teams)}/48")
+    if missing_from_db:
+        print(f"❌ ADVERTENCIA: Hay {len(missing_from_db)} selecciones del Mundial no encontradas en la DB (IDs: {missing_from_db})")
+    print("")
     
     missing_matches = []
     missing_players = []
@@ -29,7 +37,7 @@ def run_diagnostics(session: Session):
         ).one()
         
         if matches_count < 20:
-            missing_matches.append(f"{team.name}: {matches_count} partidos")
+            missing_matches.append(f"{team.name} (ID: {team.id}): {matches_count} partidos")
             
         # Contar jugadores
         players_count = session.exec(
@@ -38,28 +46,35 @@ def run_diagnostics(session: Session):
         ).one()
         
         if players_count < 11:
-            missing_players.append(f"{team.name}: {players_count} jugadores")
+            missing_players.append(f"{team.name} (ID: {team.id}): {players_count} jugadores")
             
     # RESULTADOS PARTIDOS
-    print("--- 1. AUDITORÍA DE PARTIDOS (Mínimo esperado: 20) ---")
-    if not missing_matches:
-        print("✅ ¡PERFECTO! Todos los equipos tienen al menos 20 partidos históricos.")
+    print("--- 1. AUDITORÍA DE PARTIDOS DEL MUNDIAL (Mínimo esperado: 20) ---")
+    if not missing_matches and not missing_from_db:
+        print("✅ ¡PERFECTO! Todas las selecciones del Mundial tienen al menos 20 partidos históricos.")
     else:
-        print(f"❌ ADVERTENCIA: Hay {len(missing_matches)} equipos con historial insuficiente:")
-        for m in missing_matches:
-            print(f"   - {m}")
+        if missing_matches:
+            print(f"❌ ADVERTENCIA: Hay {len(missing_matches)} selecciones con historial insuficiente:")
+            for m in missing_matches:
+                print(f"   - {m}")
+        else:
+            print("✅ Todos los equipos registrados tienen al menos 20 partidos históricos (pero faltan algunos equipos en la DB).")
             
-    print("\n--- 2. AUDITORÍA DE PLANTILLAS (Mínimo esperado: 11) ---")
-    if not missing_players:
-        print("✅ ¡PERFECTO! Todos los equipos tienen al menos un 11 inicial.")
+    print("\n--- 2. AUDITORÍA DE PLANTILLAS DEL MUNDIAL (Mínimo esperado: 11) ---")
+    if not missing_players and not missing_from_db:
+        print("✅ ¡PERFECTO! Todas las selecciones del Mundial tienen al menos un 11 inicial.")
     else:
-        print(f"❌ ADVERTENCIA: Hay {len(missing_players)} equipos con plantillas incompletas:")
-        for p in missing_players:
-            print(f"   - {p}")
+        if missing_players:
+            print(f"❌ ADVERTENCIA: Hay {len(missing_players)} selecciones con plantillas incompletas:")
+            for p in missing_players:
+                print(f"   - {p}")
+        else:
+            print("✅ Todos los equipos registrados tienen al menos un 11 inicial (pero faltan algunos equipos en la DB).")
             
     print("\n=========================================")
     print("NOTA: Si faltan datos, ejecuta el botón de")
-    print("'Actualizar Elos y Plantillas' desde la UI.")
+    print("'Actualizar Elos y Plantillas' en la UI o")
+    print("el botón de descarga masiva de datos.")
     print("=========================================")
 
 if __name__ == "__main__":
