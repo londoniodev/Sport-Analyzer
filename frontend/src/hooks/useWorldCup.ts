@@ -14,7 +14,8 @@ export function useWorldCup() {
   const [groups, setGroups] = useState(() => 
     worldCupGroups.map((g: any) => ({
       ...g,
-      teams: g.teams.map((t: any) => ({ ...t, played: 0, pts: 0, gf: 0, ga: 0, gd: 0 }))
+      teams: g.teams.map((t: any) => ({ ...t, played: 0, pts: 0, gf: 0, ga: 0, gd: 0 })),
+      matches: []
     }))
   );
   const [simulatingGroupsProgress, setSimulatingGroupsProgress] = useState<{current: number, total: number, message: string} | null>(null);
@@ -75,12 +76,20 @@ export function useWorldCup() {
 
   const simulateGroupStage = async () => {
     setSimulatingGroupsProgress({ current: 0, total: 72, message: 'Preparando calendarios...' });
-    const updatedGroups = JSON.parse(JSON.stringify(groups));
+    
+    // Always start from a clean copy of worldCupGroups to avoid index shifts from previous sortings
+    const updatedGroups = worldCupGroups.map((g: any) => ({
+      ...g,
+      teams: g.teams.map((t: any) => ({ ...t, played: 0, pts: 0, gf: 0, ga: 0, gd: 0 })),
+      matches: []
+    }));
+    
     let matchesSimulated = 0;
     const matchPairs = [[0,1], [2,3], [0,2], [1,3], [0,3], [1,2]];
     
     for (let gIndex = 0; gIndex < 12; gIndex++) {
        const group = updatedGroups[gIndex];
+       group.matches = [];
        for (const pair of matchPairs) {
            const teamHome = group.teams[pair[0]];
            const teamAway = group.teams[pair[1]];
@@ -95,6 +104,15 @@ export function useWorldCup() {
                    const chosenScoreStr = getWeightedRandomScore(topScores);
                    const [homeScore, awayScore] = chosenScoreStr.split('-').map(Number);
                    
+                   group.matches.push({
+                       home: teamHome.name,
+                       homeFlag: teamHome.flag,
+                       away: teamAway.name,
+                       awayFlag: teamAway.flag,
+                       homeScore,
+                       awayScore
+                   });
+
                    teamHome.played += 1;
                    teamAway.played += 1;
                    teamHome.gf += homeScore;

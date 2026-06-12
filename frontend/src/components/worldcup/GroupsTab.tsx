@@ -70,6 +70,26 @@ export default function GroupsTab({ state }: { state: any }) {
                 </tbody>
               </table>
             </CardContent>
+            {group.matches && group.matches.length > 0 && (
+              <div className="border-t border-slate-800 bg-slate-950/45 p-3 space-y-1.5 text-[11px]">
+                <div className="font-semibold text-slate-500 mb-1.5 uppercase tracking-wider text-[9px] text-center">Partidos Simulados</div>
+                <div className="space-y-1">
+                  {group.matches.map((m: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center text-slate-300">
+                      <span className="truncate flex-1 text-right mr-1.5">
+                        {m.homeFlag} {m.home}
+                      </span>
+                      <span className="bg-slate-800 text-[#f3e5ab] px-1.5 py-0.5 rounded font-mono font-bold mx-1 shrink-0 text-[10px] min-w-[32px] text-center">
+                        {m.homeScore} - {m.awayScore}
+                      </span>
+                      <span className="truncate flex-1 text-left ml-1.5">
+                        {m.away} {m.awayFlag}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
         ))}
       </div>
