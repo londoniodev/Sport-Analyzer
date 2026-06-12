@@ -115,18 +115,18 @@ def get_points_label(points: int) -> str:
 
 # World Cup 2026 team API-Football IDs for bulk sync
 WORLD_CUP_TEAM_IDS = [
-    16, 15, 17, 773,       # Group A: Mexico, South Africa, South Korea, Czech Republic
-    5529, 776, 1569, 14,    # Group B: Canada, Bosnia, Qatar, Switzerland
-    6, 31, 1577, 1108,      # Group C: Brazil, Morocco, Haiti, Scotland
-    2384, 2385, 18, 777,    # Group D: USA, Paraguay, Australia, Turkey
-    25, 145, 2381, 2382,    # Group E: Germany, Curacao, Ivory Coast, Ecuador
-    1118, 12, 1091, 28,     # Group F: Netherlands, Japan, Sweden, Tunisia
-    1, 30, 22, 1530,        # Group G: Belgium, Egypt, Iran, New Zealand
-    9, 1580, 23, 7,         # Group H: Spain, Cape Verde, Saudi Arabia, Uruguay
-    2, 34, 21, 1090,        # Group I: France, Senegal, Iraq, Norway
-    26, 1559, 775, 1571,    # Group J: Argentina, Algeria, Austria, Jordan
-    27, 2379, 1574, 1560,   # Group K: Portugal, DR Congo, Uzbekistan, Colombia
-    10, 3, 2383, 1563       # Group L: England, Croatia, Ghana, Panama
+    16, 1531, 17, 770,      # Group A: Mexico, South Africa, South Korea, Czech Republic
+    5529, 1113, 1569, 15,   # Group B: Canada, Bosnia, Qatar, Switzerland
+    6, 31, 2386, 1108,      # Group C: Brazil, Morocco, Haiti, Scotland
+    2384, 2380, 20, 777,    # Group D: USA, Paraguay, Australia, Turkey
+    25, 5530, 1501, 2382,   # Group E: Germany, Curacao, Ivory Coast, Ecuador
+    1118, 12, 5, 28,        # Group F: Netherlands, Japan, Sweden, Tunisia
+    1, 32, 22, 4673,        # Group G: Belgium, Egypt, Iran, New Zealand
+    9, 1533, 23, 7,         # Group H: Spain, Cape Verde, Saudi Arabia, Uruguay
+    2, 13, 1567, 1090,      # Group I: France, Senegal, Iraq, Norway
+    26, 1559, 775, 1548,    # Group J: Argentina, Algeria, Austria, Jordan
+    27, 1508, 1568, 8,      # Group K: Portugal, DR Congo, Uzbekistan, Colombia
+    10, 3, 1504, 11         # Group L: England, Croatia, Ghana, Panama
 ]
 
 WORLD_CUP_LEAGUE_ID = 1

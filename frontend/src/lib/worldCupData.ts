@@ -14,18 +14,18 @@ export const worldCupGroups: Group[] = [
     name: 'Grupo A',
     teams: [
       { name: 'México', flag: '🇲🇽', apiId: 16 },
-      { name: 'Sudáfrica', flag: '🇿🇦', apiId: 15 },
+      { name: 'Sudáfrica', flag: '🇿🇦', apiId: 1531 },
       { name: 'Corea del Sur', flag: '🇰🇷', apiId: 17 },
-      { name: 'República Checa', flag: '🇨🇿', apiId: 773 }
+      { name: 'República Checa', flag: '🇨🇿', apiId: 770 }
     ]
   },
   {
     name: 'Grupo B',
     teams: [
       { name: 'Canadá', flag: '🇨🇦', apiId: 5529 },
-      { name: 'Bosnia y Herzegovina', flag: '🇧🇦', apiId: 776 },
+      { name: 'Bosnia y Herzegovina', flag: '🇧🇦', apiId: 1113 },
       { name: 'Qatar', flag: '🇶🇦', apiId: 1569 },
-      { name: 'Suiza', flag: '🇨🇭', apiId: 14 }
+      { name: 'Suiza', flag: '🇨🇭', apiId: 15 }
     ]
   },
   {
@@ -33,7 +33,7 @@ export const worldCupGroups: Group[] = [
     teams: [
       { name: 'Brasil', flag: '🇧🇷', apiId: 6 },
       { name: 'Marruecos', flag: '🇲🇦', apiId: 31 },
-      { name: 'Haití', flag: '🇭🇹', apiId: 1577 },
+      { name: 'Haití', flag: '🇭🇹', apiId: 2386 },
       { name: 'Escocia', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', apiId: 1108 }
     ]
   },
@@ -41,8 +41,8 @@ export const worldCupGroups: Group[] = [
     name: 'Grupo D',
     teams: [
       { name: 'Estados Unidos', flag: '🇺🇸', apiId: 2384 },
-      { name: 'Paraguay', flag: '🇵🇾', apiId: 2385 },
-      { name: 'Australia', flag: '🇦🇺', apiId: 18 },
+      { name: 'Paraguay', flag: '🇵🇾', apiId: 2380 },
+      { name: 'Australia', flag: '🇦🇺', apiId: 20 },
       { name: 'Turquía', flag: '🇹🇷', apiId: 777 }
     ]
   },
@@ -50,8 +50,8 @@ export const worldCupGroups: Group[] = [
     name: 'Grupo E',
     teams: [
       { name: 'Alemania', flag: '🇩🇪', apiId: 25 },
-      { name: 'Curazao', flag: '🇨🇼', apiId: 145 },
-      { name: 'Costa de Marfil', flag: '🇨🇮', apiId: 2381 },
+      { name: 'Curazao', flag: '🇨🇼', apiId: 5530 },
+      { name: 'Costa de Marfil', flag: '🇨🇮', apiId: 1501 },
       { name: 'Ecuador', flag: '🇪🇨', apiId: 2382 }
     ]
   },
@@ -60,7 +60,7 @@ export const worldCupGroups: Group[] = [
     teams: [
       { name: 'Países Bajos', flag: '🇳🇱', apiId: 1118 },
       { name: 'Japón', flag: '🇯🇵', apiId: 12 },
-      { name: 'Suecia', flag: '🇸🇪', apiId: 1091 },
+      { name: 'Suecia', flag: '🇸🇪', apiId: 5 },
       { name: 'Túnez', flag: '🇹🇳', apiId: 28 }
     ]
   },
@@ -68,16 +68,16 @@ export const worldCupGroups: Group[] = [
     name: 'Grupo G',
     teams: [
       { name: 'Bélgica', flag: '🇧🇪', apiId: 1 },
-      { name: 'Egipto', flag: '🇪🇬', apiId: 30 },
+      { name: 'Egipto', flag: '🇪🇬', apiId: 32 },
       { name: 'Irán', flag: '🇮🇷', apiId: 22 },
-      { name: 'Nueva Zelanda', flag: '🇳🇿', apiId: 1530 }
+      { name: 'Nueva Zelanda', flag: '🇳🇿', apiId: 4673 }
     ]
   },
   {
     name: 'Grupo H',
     teams: [
       { name: 'España', flag: '🇪🇸', apiId: 9 },
-      { name: 'Cabo Verde', flag: '🇨🇻', apiId: 1580 },
+      { name: 'Cabo Verde', flag: '🇨🇻', apiId: 1533 },
       { name: 'Arabia Saudita', flag: '🇸🇦', apiId: 23 },
       { name: 'Uruguay', flag: '🇺🇾', apiId: 7 }
     ]
@@ -86,8 +86,8 @@ export const worldCupGroups: Group[] = [
     name: 'Grupo I',
     teams: [
       { name: 'Francia', flag: '🇫🇷', apiId: 2 },
-      { name: 'Senegal', flag: '🇸🇳', apiId: 34 },
-      { name: 'Irak', flag: '🇮🇶', apiId: 21 },
+      { name: 'Senegal', flag: '🇸🇳', apiId: 13 },
+      { name: 'Irak', flag: '🇮🇶', apiId: 1567 },
       { name: 'Noruega', flag: '🇳🇴', apiId: 1090 }
     ]
   },
@@ -97,16 +97,16 @@ export const worldCupGroups: Group[] = [
       { name: 'Argentina', flag: '🇦🇷', apiId: 26 },
       { name: 'Argelia', flag: '🇩🇿', apiId: 1559 },
       { name: 'Austria', flag: '🇦🇹', apiId: 775 },
-      { name: 'Jordania', flag: '🇯🇴', apiId: 1571 }
+      { name: 'Jordania', flag: '🇯🇴', apiId: 1548 }
     ]
   },
   {
     name: 'Grupo K',
     teams: [
       { name: 'Portugal', flag: '🇵🇹', apiId: 27 },
-      { name: 'RD Congo', flag: '🇨🇩', apiId: 2379 },
-      { name: 'Uzbekistán', flag: '🇺🇿', apiId: 1574 },
-      { name: 'Colombia', flag: '🇨🇴', apiId: 1560 }
+      { name: 'RD Congo', flag: '🇨🇩', apiId: 1508 },
+      { name: 'Uzbekistán', flag: '🇺🇿', apiId: 1568 },
+      { name: 'Colombia', flag: '🇨🇴', apiId: 8 }
     ]
   },
   {
@@ -114,8 +114,8 @@ export const worldCupGroups: Group[] = [
     teams: [
       { name: 'Inglaterra', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', apiId: 10 },
       { name: 'Croacia', flag: '🇭🇷', apiId: 3 },
-      { name: 'Ghana', flag: '🇬🇭', apiId: 2383 },
-      { name: 'Panamá', flag: '🇵🇦', apiId: 1563 }
+      { name: 'Ghana', flag: '🇬🇭', apiId: 1504 },
+      { name: 'Panamá', flag: '🇵🇦', apiId: 11 }
     ]
   }
 ];
