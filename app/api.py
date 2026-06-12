@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Optional, List, Dict, Any
 import uvicorn
 from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, Query
@@ -7,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select, func
+
+logger = logging.getLogger("api")
 
 from app.core.database import get_session, init_db
 from app.sports.football.models import Team, Player, League, Fixture, Injury, WorldCupPrediction
@@ -371,6 +374,7 @@ def start_worldcup_sync(background_tasks: BackgroundTasks, resume: bool = Query(
     background_tasks.add_task(_run_worldcup_sync, resume)
     return {"message": "World Cup sync started in background", "resume_mode": resume}
 
+@app.get("/api/worldcup/sync/status")
 @app.get("/api/worldcup/sync-status")
 def get_worldcup_sync_status():
     """Devuelve el progreso de la sincronización del Mundial."""
