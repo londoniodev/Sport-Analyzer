@@ -254,17 +254,35 @@ export function useWorldCup() {
     if (!match.home_team || !match.away_team) return;
     setSimulatingBracket(matchId); // Reuse this state for the spinner
     try {
+      // Execute a "Deep Simulation" with 100,000 iterations for variance
       const res = await fetch('/api/worldcup/simulate/match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ home_id: match.home_team.apiId, away_id: match.away_team.apiId, simulations: 10000 })
+        body: JSON.stringify({ home_id: match.home_team.apiId, away_id: match.away_team.apiId, simulations: 100000 })
       });
       const data = await res.json();
+      
+      // Update bracket state
       setBracket(prev => ({
         ...prev,
         [matchId]: {
           ...prev[matchId],
           montecarlo: data
+        }
+      }));
+      
+      // Update modal state so the UI reflects the new simulation
+      setMatchStats(prev => ({
+        ...prev,
+        [matchId]: {
+          ...prev[matchId],
+          montecarlo: {
+             simulations: data.simulations,
+             result_probs: data.result_probs,
+             score_distribution_top5: Object.fromEntries(
+               Object.entries(data.score_distribution).sort(([,a]: any, [,b]: any) => b - a).slice(0, 5)
+             )
+          }
         }
       }));
     } catch (e) { console.error(e); }

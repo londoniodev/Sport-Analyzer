@@ -99,14 +99,14 @@ export default function MatchStatsModal({ state }: { state: any }) {
                       <h3 className="font-bold text-purple-300 flex items-center gap-2">
                         <Zap className="w-4 h-4" /> Simulación Montecarlo
                       </h3>
-                      <p className="text-[10px] text-purple-400/70 mt-1">Simula 10,000 partidos en el servidor</p>
+                      <p className="text-[10px] text-purple-400/70 mt-1">Simulación Profunda (100,000 iteraciones en backend)</p>
                     </div>
                     <Button 
                       onClick={() => runMontecarlo(id)} 
                       disabled={isSimulatingMC} 
                       className="bg-purple-600 hover:bg-purple-500 text-white font-bold h-8 text-xs shadow-[0_0_15px_rgba(147,51,234,0.4)]"
                     >
-                      {isSimulatingMC ? <RefreshCw className="w-3 h-3 mr-2 animate-spin" /> : 'Ejecutar 10K'}
+                      {isSimulatingMC ? <RefreshCw className="w-3 h-3 mr-2 animate-spin" /> : 'Ejecutar 100K'}
                     </Button>
                   </div>
                   {stats.montecarlo ? (
