@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { worldCupGroups } from '../lib/worldCupData';
 import type { SyncStatus, WCFixture, Prediction, BracketMatch } from '../components/worldcup/types';
-import { generateInitialBracket, getWeightedRandomScore } from '../components/worldcup/utils';
+import { generateInitialBracket } from '../components/worldcup/utils';
 
 export function useWorldCup() {
   const [activeTab, setActiveTab] = useState<'groups' | 'fixtures' | 'predictions' | 'bracket'>('groups');

@@ -1,6 +1,6 @@
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+// removed unused import
 import { RefreshCw, X, Target, Zap } from 'lucide-react';
 import { getFlag } from './utils';
 
