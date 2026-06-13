@@ -225,6 +225,17 @@ def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> D
     cards_preds = None
     if (home_cards_total + away_cards_total) > 0:
         cards_preds = AdvancedPredictor.predict_cards(home_cards_total, away_cards_total)
+        
+    from app.sports.football.analytics.predictive.montecarlo import MonteCarloEngine
+    from app.sports.football.analytics.worldcup_scoring import find_optimal_prediction
+    
+    # MonteCarlo para score distribution y Polla óptima
+    mc_result = MonteCarloEngine.simulate_match(home_xg, away_xg, n=10000)
+    opt_h, opt_a, ev = find_optimal_prediction(mc_result["score_distribution"])
+    penalty_qualifier = MonteCarloEngine.simulate_team_shootout(home_rating, away_rating) if opt_h == opt_a else None
+    
+    # Sort montecarlo top 5 for UI
+    mc_top5 = dict(sorted(mc_result["score_distribution"].items(), key=lambda x: x[1], reverse=True)[:5])
     
     return {
         "expected_goals": {"home": round(home_xg, 2), "away": round(away_xg, 2)},
@@ -241,6 +252,15 @@ def get_full_match_prediction(home_id: int, away_id: int, session: Session) -> D
         "halftime": ht_preds,
         "handicaps": handicaps,
         "corners": corners_preds,
-        "cards": cards_preds
+        "cards": cards_preds,
+        "polla_score": {"home": opt_h, "away": opt_a},
+        "expected_value_pts": round(ev, 2),
+        "penalty_qualifier": penalty_qualifier,
+        "montecarlo": {
+            "simulations": mc_result["simulations"],
+            "result_probs": mc_result["result_probs"],
+            "score_distribution_top5": mc_top5
+        }
     }
+
 

@@ -131,3 +131,49 @@ WORLD_CUP_TEAM_IDS = [
 
 WORLD_CUP_LEAGUE_ID = 1
 WORLD_CUP_SEASON = 2026
+
+
+def calculate_expected_points(pred_home: int, pred_away: int, score_distribution: dict) -> float:
+    """
+    Calcula el valor esperado (Expected Value) de puntos para una predicción dada.
+    
+    Args:
+        pred_home: Goles predichos del equipo local
+        pred_away: Goles predichos del equipo visitante
+        score_distribution: Diccionario con la distribución de probabilidades (ej. {"1-0": 0.15, "0-0": 0.12})
+        
+    Returns:
+        Valor esperado en puntos.
+    """
+    ev = 0.0
+    for score_str, prob in score_distribution.items():
+        actual_home, actual_away = map(int, score_str.split('-'))
+        pts = calculate_match_points(pred_home, pred_away, actual_home, actual_away)
+        ev += pts * prob
+    return ev
+
+
+def find_optimal_prediction(score_distribution: dict) -> tuple:
+    """
+    Itera los posibles marcadores (0-6 goles) y retorna el que maximiza el Expected Value 
+    para las reglas de la Polla.
+    
+    Args:
+        score_distribution: Distribución de probabilidades generada por Montecarlo o Poisson
+        
+    Returns:
+        Tuple (home_goals, away_goals, expected_points)
+    """
+    best_pred = (0, 0)
+    max_ev = -1.0
+    
+    # Consider predictions up to 6 goals for optimization
+    for h in range(7):
+        for a in range(7):
+            ev = calculate_expected_points(h, a, score_distribution)
+            if ev > max_ev:
+                max_ev = ev
+                best_pred = (h, a)
+                
+    return best_pred[0], best_pred[1], max_ev
+

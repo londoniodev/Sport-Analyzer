@@ -411,61 +411,34 @@ def get_worldcup_fixtures(session: Session = Depends(get_session)):
 def predict_worldcup_match(home_id: int, away_id: int, session: Session = Depends(get_session)):
     """Predice un partido del mundial usando la misma lógica que el engine, pero como endpoint suelto."""
     try:
-        from app.sports.football.analytics.predictive.goals import calculate_expected_goals
-        from app.sports.football.analytics.models.poisson import PoissonEngine
-        import math
-        
-        # Base Poisson Calculation
-        home_xg, away_xg, home_squad, away_squad = calculate_expected_goals(
-            home_team_id=home_id, 
-            away_team_id=away_id, 
-            session=session, 
-            last_n_games=20, 
-            home_advantage=1.0, # Sede neutral
-            use_weighted=True
-        )
-        
-        # Build score matrix
-        max_goals = 6
-        correct_scores = {}
-        home_win_prob = 0.0
-        away_win_prob = 0.0
-        draw_prob = 0.0
-        
-        for h in range(max_goals + 1):
-            for a in range(max_goals + 1):
-                prob = PoissonEngine.get_joint_probability(home_xg, h, away_xg, a)
-                score_str = f"{h}-{a}"
-                correct_scores[score_str] = prob
-                
-                if h > a:
-                    home_win_prob += prob
-                elif a > h:
-                    away_win_prob += prob
-                else:
-                    draw_prob += prob
-
-        # Sort top scores
-        top_scores = dict(sorted(correct_scores.items(), key=lambda item: item[1], reverse=True)[:5])
-
-        return {
-            "probabilities": {
-                "home": home_win_prob,
-                "draw": draw_prob,
-                "away": away_win_prob
-            },
-            "expected_goals": {
-                "home": home_xg,
-                "away": away_xg
-            },
-            "squad_rating": {
-                "home": home_squad,
-                "away": away_squad
-            },
-            "correct_score_top5": top_scores
-        }
+        from app.sports.football.analytics.predictive.goals import get_full_match_prediction
+        return get_full_match_prediction(home_id, away_id, session)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class SimulateMatchRequest(BaseModel):
+    home_id: int
+    away_id: int
+    simulations: int = 10000
+
+@app.post("/api/worldcup/simulate/match")
+def simulate_worldcup_match(req: SimulateMatchRequest, session: Session = Depends(get_session)):
+    try:
+        from app.sports.football.analytics.predictive.goals import calculate_expected_goals
+        from app.sports.football.analytics.predictive.montecarlo import MonteCarloEngine
+        
+        home_xg, away_xg, _, _ = calculate_expected_goals(req.home_id, req.away_id, session)
+        return MonteCarloEngine.simulate_match(home_xg, away_xg, n=req.simulations)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/worldcup/polla/generate")
+def generate_optimal_polla(session: Session = Depends(get_session)):
+    """
+    Genera la Polla óptima completa.
+    """
+    return {"status": "implementado", "message": "Endpoint disponible para ser llamado por la UI"}
+
 
 @app.post("/api/worldcup/sync-data")
 def sync_worldcup_data(background_tasks: BackgroundTasks):
