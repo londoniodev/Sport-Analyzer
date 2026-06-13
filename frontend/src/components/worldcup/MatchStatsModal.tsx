@@ -1,17 +1,18 @@
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { RefreshCw, X } from 'lucide-react';
-import { getFlag, getOdds } from './utils';
+import { RefreshCw, X, Target, Zap } from 'lucide-react';
+import { getFlag } from './utils';
 
 export default function MatchStatsModal({ state }: { state: any }) {
-  const { selectedMatchModal, setSelectedMatchModal, loadingStats, matchStats } = state;
+  const { selectedMatchModal, setSelectedMatchModal, loadingStats, matchStats, runMontecarlo, simulatingBracket } = state;
 
   if (!selectedMatchModal) return null;
 
   const id = selectedMatchModal.id;
   const loading = loadingStats[id];
   const stats = matchStats[id];
+  const isSimulatingMC = simulatingBracket === id;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -39,173 +40,135 @@ export default function MatchStatsModal({ state }: { state: any }) {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <RefreshCw className="w-8 h-8 animate-spin text-[#d4af37] mb-4" />
-              <p>Calculando cuotas y probabilidades con el motor de Poisson...</p>
+              <p>Analizando predicción óptima (EV)...</p>
             </div>
           ) : stats ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              {/* Left Column: Main Markets */}
+              {/* Left Column: Optimal Prediction */}
               <div className="lg:col-span-2 space-y-6">
                 
-                {/* Market: 1X2 Match Winner */}
+                {/* Optimal Polla Score */}
+                <Card className="bg-slate-900 border-[#d4af37]/30 p-0 overflow-hidden shadow-[0_0_15px_rgba(212,175,55,0.1)]">
+                  <div className="bg-[#d4af37]/10 p-4 border-b border-[#d4af37]/30">
+                    <h3 className="font-bold text-[#d4af37] flex items-center gap-2">
+                      <Target className="w-5 h-5" />
+                      Predicción Óptima para Polla (Expected Value)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Este marcador maximiza tus puntos basándose en la probabilidad de resultados y el sistema de puntuación.</p>
+                  </div>
+                  <div className="p-8 flex flex-col items-center justify-center">
+                    <div className="flex items-center gap-8 text-5xl font-black font-mono tracking-widest text-white">
+                      <span>{stats.polla_score?.home ?? '-'}</span>
+                      <span className="text-slate-600">-</span>
+                      <span>{stats.polla_score?.away ?? '-'}</span>
+                    </div>
+                    {stats.expected_value_pts && (
+                      <div className="mt-6 bg-slate-950 px-4 py-2 rounded-full border border-slate-800 text-sm font-semibold text-slate-300">
+                        Puntos Esperados (EV): <span className="text-green-400">{stats.expected_value_pts} pts</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* 1X2 Probabilities */}
                 <Card className="bg-slate-900 border-slate-800 p-0 overflow-hidden">
                   <div className="bg-slate-800/50 p-3 border-b border-slate-800">
-                    <h3 className="font-bold text-slate-300 flex justify-between items-center text-sm">
-                      <span>Ganador del Partido (1X2)</span>
-                      <Badge variant={"outline" as any} className="text-[#d4af37] border-[#d4af37]/30 bg-[#d4af37]/10">Mercado Principal</Badge>
-                    </h3>
+                    <h3 className="font-bold text-slate-300 text-sm">Probabilidades de Resultado (1X2)</h3>
                   </div>
                   <div className="p-4 grid grid-cols-3 gap-3">
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 hover:border-[#d4af37]/50 cursor-pointer transition-colors group">
-                      <div className="text-xs text-slate-400 mb-1 font-semibold">{selectedMatchModal.homeName} (1)</div>
-                      <div className="flex justify-between items-end">
-                        <span className="text-2xl font-black text-[#f3e5ab]">{getOdds(stats['1x2']?.home_win)}</span>
-                        <span className="text-xs text-green-400">{(stats['1x2']?.home_win * 100).toFixed(0)}%</span>
-                      </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-center">
+                      <div className="text-xs text-slate-400 mb-2 font-semibold">{selectedMatchModal.homeName}</div>
+                      <div className="text-2xl font-black text-[#f3e5ab]">{(stats['1x2']?.home_win * 100).toFixed(1)}%</div>
                     </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 hover:border-slate-600 cursor-pointer transition-colors group">
-                      <div className="text-xs text-slate-400 mb-1 font-semibold">Empate (X)</div>
-                      <div className="flex justify-between items-end">
-                        <span className="text-2xl font-black text-slate-300">{getOdds(stats['1x2']?.draw)}</span>
-                        <span className="text-xs text-yellow-400">{(stats['1x2']?.draw * 100).toFixed(0)}%</span>
-                      </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-center">
+                      <div className="text-xs text-slate-400 mb-2 font-semibold">Empate</div>
+                      <div className="text-2xl font-black text-slate-300">{(stats['1x2']?.draw * 100).toFixed(1)}%</div>
                     </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 hover:border-blue-500/50 cursor-pointer transition-colors group">
-                      <div className="text-xs text-slate-400 mb-1 font-semibold">{selectedMatchModal.awayName} (2)</div>
-                      <div className="flex justify-between items-end">
-                        <span className="text-2xl font-black text-blue-400">{getOdds(stats['1x2']?.away_win)}</span>
-                        <span className="text-xs text-blue-400">{(stats['1x2']?.away_win * 100).toFixed(0)}%</span>
-                      </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-center">
+                      <div className="text-xs text-slate-400 mb-2 font-semibold">{selectedMatchModal.awayName}</div>
+                      <div className="text-2xl font-black text-blue-400">{(stats['1x2']?.away_win * 100).toFixed(1)}%</div>
                     </div>
                   </div>
                 </Card>
 
-                {/* Goals Markets (BTTS & Over/Under) */}
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Both Teams To Score */}
-                  <Card className="bg-slate-900 border-slate-800 p-0 overflow-hidden">
-                    <div className="bg-slate-800/50 p-2.5 border-b border-slate-800">
-                      <h3 className="font-bold text-slate-300 text-xs">Ambos Equipos Marcan</h3>
+                {/* Montecarlo Section */}
+                <Card className="bg-purple-950/20 border-purple-900/50 p-0 overflow-hidden relative">
+                  <div className="bg-purple-900/30 p-4 border-b border-purple-900/50 flex justify-between items-center">
+                    <div>
+                      <h3 className="font-bold text-purple-300 flex items-center gap-2">
+                        <Zap className="w-4 h-4" /> Simulación Montecarlo
+                      </h3>
+                      <p className="text-[10px] text-purple-400/70 mt-1">Simula 10,000 partidos en el servidor</p>
                     </div>
-                    <div className="p-3 grid grid-cols-2 gap-2">
-                      <div className="bg-slate-950 border border-slate-800 rounded p-2 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase">Sí</div>
-                        <div className="font-bold text-[#f3e5ab]">{getOdds(stats.btts?.yes)}</div>
-                        <div className="text-[10px] text-slate-500">{(stats.btts?.yes * 100).toFixed(0)}%</div>
-                      </div>
-                      <div className="bg-slate-950 border border-slate-800 rounded p-2 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase">No</div>
-                        <div className="font-bold text-slate-300">{getOdds(stats.btts?.no)}</div>
-                        <div className="text-[10px] text-slate-500">{(stats.btts?.no * 100).toFixed(0)}%</div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Over / Under 2.5 */}
-                  <Card className="bg-slate-900 border-slate-800 p-0 overflow-hidden">
-                    <div className="bg-slate-800/50 p-2.5 border-b border-slate-800">
-                      <h3 className="font-bold text-slate-300 text-xs">Total de Goles (2.5)</h3>
-                    </div>
-                    <div className="p-3 grid grid-cols-2 gap-2">
-                      <div className="bg-slate-950 border border-slate-800 rounded p-2 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase">Más de 2.5</div>
-                        <div className="font-bold text-[#f3e5ab]">{getOdds(stats.over_under?.['2.5']?.over)}</div>
-                        <div className="text-[10px] text-slate-500">{(stats.over_under?.['2.5']?.over * 100).toFixed(0)}%</div>
-                      </div>
-                      <div className="bg-slate-950 border border-slate-800 rounded p-2 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase">Menos de 2.5</div>
-                        <div className="font-bold text-slate-300">{getOdds(stats.over_under?.['2.5']?.under)}</div>
-                        <div className="text-[10px] text-slate-500">{(stats.over_under?.['2.5']?.under * 100).toFixed(0)}%</div>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Exact Scores (Top 5) */}
-                <Card className="bg-slate-900 border-slate-800 p-0 overflow-hidden">
-                  <div className="bg-slate-800/50 p-3 border-b border-slate-800 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-300 text-sm">Marcadores Exactos (Top 5 Probables)</h3>
+                    <Button 
+                      onClick={() => runMontecarlo(id)} 
+                      disabled={isSimulatingMC} 
+                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold h-8 text-xs shadow-[0_0_15px_rgba(147,51,234,0.4)]"
+                    >
+                      {isSimulatingMC ? <RefreshCw className="w-3 h-3 mr-2 animate-spin" /> : 'Ejecutar 10K'}
+                    </Button>
                   </div>
-                  <div className="p-4 flex gap-3 overflow-x-auto">
-                    {Object.entries(stats.correct_score_top5 || {}).map(([score, prob]: [string, any]) => (
-                      <div key={score} className="bg-slate-950 border border-slate-800 rounded-lg p-3 min-w-[100px] flex-shrink-0 text-center">
-                        <div className="text-xl font-bold font-mono text-[#f3e5ab] tracking-widest">{score}</div>
-                        <div className="text-sm font-semibold text-white mt-1">{getOdds(prob)}</div>
-                        <div className="text-[10px] text-slate-500 mt-1">{(prob * 100).toFixed(1)}% prob.</div>
-                      </div>
-                    ))}
-                  </div>
+                  {stats.montecarlo ? (
+                    <div className="p-4 grid grid-cols-5 gap-2 overflow-x-auto">
+                      {Object.entries(stats.montecarlo.score_distribution_top5 || {}).map(([score, prob]: [string, any]) => (
+                        <div key={score} className="bg-slate-950/80 border border-purple-900/30 rounded-lg p-2 text-center min-w-[70px]">
+                          <div className="text-lg font-bold font-mono text-purple-200">{score}</div>
+                          <div className="text-[10px] text-purple-400 mt-1">{(prob * 100).toFixed(1)}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-slate-500 text-sm">
+                      Aún no se ha ejecutado Montecarlo On-Demand para este partido.
+                    </div>
+                  )}
                 </Card>
 
               </div>
 
-              {/* Right Column: Deep Stats (xG, Ratings, Props) */}
+              {/* Right Column: Deep Stats (xG, Ratings) */}
               <div className="space-y-4">
                 
-                {/* Power Ratings */}
+                {/* Power Ratings & xG */}
                 <Card className="bg-slate-900 border-slate-800 p-4">
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Métricas del Simulador</h4>
                   
                   <div className="mb-4">
                     <div className="flex justify-between text-xs text-slate-400 mb-1">
-                      <span>Squad Rating</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-[#d4af37] w-8">{stats.squad_rating?.home || "6.5"}</span>
-                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full flex">
-                         <div className="bg-[#d4af37] h-full" style={{ width: `${(stats.squad_rating?.home / 10) * 100}%` }} />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="font-mono text-sm text-blue-400 w-8">{stats.squad_rating?.away || "6.5"}</span>
-                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full flex">
-                         <div className="bg-blue-400 h-full" style={{ width: `${(stats.squad_rating?.away / 10) * 100}%` }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
                       <span>Expected Goals (xG)</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-[#d4af37] w-8">{stats.expected_goals?.home || "1.2"}</span>
-                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full flex">
-                         <div className="bg-[#d4af37] h-full" style={{ width: `${Math.min((stats.expected_goals?.home / 3) * 100, 100)}%` }} />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="font-mono text-sm text-blue-400 w-8">{stats.expected_goals?.away || "1.0"}</span>
-                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full flex">
-                         <div className="bg-blue-400 h-full" style={{ width: `${Math.min((stats.expected_goals?.away / 3) * 100, 100)}%` }} />
-                      </div>
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="text-[#d4af37] font-bold text-lg">{stats.expected_goals?.home?.toFixed(2)}</span>
+                      <span className="text-slate-600">-</span>
+                      <span className="text-blue-400 font-bold text-lg">{stats.expected_goals?.away?.toFixed(2)}</span>
                     </div>
                   </div>
-                </Card>
 
-                {/* Propositional Stats (Corners/Cards) */}
-                <Card className="bg-slate-900 border-slate-800 p-4">
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Props Especiales</h4>
+                  <div className="mb-2 mt-6">
+                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <span>Poder (ELO Rating)</span>
+                    </div>
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="text-slate-300">{Math.round(stats.squad_rating?.home || 0)}</span>
+                      <span className="text-slate-600">vs</span>
+                      <span className="text-slate-300">{Math.round(stats.squad_rating?.away || 0)}</span>
+                    </div>
+                  </div>
                   
-                  <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                    <span className="text-sm text-slate-300">Total Córners (Línea 9.5)</span>
-                    <div className="text-right">
-                      <div className="font-bold text-[#f3e5ab]">{stats.corners?.total ? stats.corners.total.toFixed(1) : '9.2'}</div>
-                      <div className="text-[10px] text-slate-500">Estimados</div>
+                  {stats.penalty_qualifier && (
+                    <div className="mt-6 pt-4 border-t border-slate-800">
+                      <div className="text-xs text-slate-400 mb-2 font-semibold">Criterio de Desempate (Penales)</div>
+                      <div className="bg-slate-950 p-2 rounded text-center text-xs">
+                        Avanza: <span className="font-bold text-green-400">{stats.penalty_qualifier === 'home' ? selectedMatchModal.homeName : selectedMatchModal.awayName}</span>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2 border-b border-slate-800">
-                    <span className="text-sm text-slate-300">Total Tarjetas (Línea 3.5)</span>
-                    <div className="text-right">
-                      <div className="font-bold text-[#f3e5ab]">{stats.cards?.total ? stats.cards.total.toFixed(1) : '3.8'}</div>
-                      <div className="text-[10px] text-slate-500">Estimadas</div>
-                    </div>
-                  </div>
+                  )}
 
                 </Card>
-                
+
               </div>
+
             </div>
           ) : (
             <div className="text-center py-10 text-slate-500">Error al cargar datos.</div>

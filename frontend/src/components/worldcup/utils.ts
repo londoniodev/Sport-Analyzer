@@ -40,6 +40,7 @@ export const generateInitialBracket = (): Record<string, BracketMatch> => {
     bracket[`R32-${i}`] = {
       id: `R32-${i}`, round: 'R32', home_team: null, away_team: null,
       home_score: null, away_score: null, winner: null,
+      polla_score: null, is_draw_90: false, penalty_qualifier: null,
       isHomeNext: i % 2 !== 0,
       nextMatchId: `R16-${Math.ceil(i/2)}`
     };
@@ -50,6 +51,7 @@ export const generateInitialBracket = (): Record<string, BracketMatch> => {
     bracket[`R16-${i}`] = {
       id: `R16-${i}`, round: 'R16', home_team: null, away_team: null,
       home_score: null, away_score: null, winner: null,
+      polla_score: null, is_draw_90: false, penalty_qualifier: null,
       isHomeNext: i % 2 !== 0,
       nextMatchId: `QF-${Math.ceil(i/2)}`
     };
@@ -60,6 +62,7 @@ export const generateInitialBracket = (): Record<string, BracketMatch> => {
     bracket[`QF-${i}`] = {
       id: `QF-${i}`, round: 'QF', home_team: null, away_team: null,
       home_score: null, away_score: null, winner: null,
+      polla_score: null, is_draw_90: false, penalty_qualifier: null,
       isHomeNext: i % 2 !== 0,
       nextMatchId: `SF-${Math.ceil(i/2)}`
     };
@@ -70,6 +73,7 @@ export const generateInitialBracket = (): Record<string, BracketMatch> => {
     bracket[`SF-${i}`] = {
       id: `SF-${i}`, round: 'SF', home_team: null, away_team: null,
       home_score: null, away_score: null, winner: null,
+      polla_score: null, is_draw_90: false, penalty_qualifier: null,
       isHomeNext: i % 2 !== 0,
       nextMatchId: `F-1`
     };
@@ -79,6 +83,7 @@ export const generateInitialBracket = (): Record<string, BracketMatch> => {
   bracket['F-1'] = {
     id: `F-1`, round: 'F', home_team: null, away_team: null,
     home_score: null, away_score: null, winner: null,
+    polla_score: null, is_draw_90: false, penalty_qualifier: null,
     isHomeNext: true,
     nextMatchId: null
   };

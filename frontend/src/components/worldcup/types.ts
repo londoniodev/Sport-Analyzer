@@ -32,6 +32,12 @@ export interface Prediction {
   label: string;
 }
 
+export interface MonteCarloMatchResult {
+  simulations: number;
+  result_probs: { home: number; draw: number; away: number };
+  score_distribution_top5: Record<string, number>;
+}
+
 export interface BracketMatch {
   id: string;
   round: 'R32' | 'R16' | 'QF' | 'SF' | 'F';
@@ -42,4 +48,10 @@ export interface BracketMatch {
   winner: 'home' | 'away' | null;
   isHomeNext: boolean; 
   nextMatchId: string | null;
+  
+  // New Polla fields
+  polla_score: { home: number; away: number } | null;
+  is_draw_90: boolean;
+  penalty_qualifier: 'home' | 'away' | null;
+  montecarlo?: MonteCarloMatchResult;
 }

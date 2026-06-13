@@ -1,12 +1,12 @@
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
-import { RefreshCw, Zap, ZoomIn, ZoomOut, Trophy } from 'lucide-react';
+import { RefreshCw, Zap, ZoomIn, ZoomOut, Trophy, Download } from 'lucide-react';
 import { getFlag } from './utils';
 
 export default function BracketTab({ state }: { state: any }) {
   const { 
     bracket, simulatingBracket, simulatingAll, bracketZoom, setBracketZoom,
-    generateBracketFromGroups, handleSimulateAll, handleSimulateSingle, openMatchStatsModal
+    generateBracketFromGroups, handleSimulateAll, handleSimulateSingle, openMatchStatsModal, exportPolla, runMontecarlo
   } = state;
 
   return (
@@ -30,6 +30,9 @@ export default function BracketTab({ state }: { state: any }) {
           </div>
 
           <div className="flex gap-2">
+            <Button onClick={exportPolla} variant={"outline" as any} className="border-slate-700 hover:bg-slate-800 text-blue-400 h-10">
+              <Download className="w-4 h-4 mr-2" /> Exportar JSON
+            </Button>
             <Button onClick={generateBracketFromGroups} variant={"outline" as any} className="border-slate-700 hover:bg-slate-800 h-10">
               <RefreshCw className="w-4 h-4 mr-2" /> Reiniciar
             </Button>
@@ -68,11 +71,17 @@ export default function BracketTab({ state }: { state: any }) {
                       return (
                         <div key={m.id} className="relative my-2">
                           <Card className={`bg-slate-900 border ${m.winner ? 'border-[#d4af37]/50 shadow-[0_0_10px_rgba(212,175,55,0.1)]' : 'border-slate-800'} overflow-hidden relative z-10 rounded-md`}>
+                            {m.montecarlo && (
+                               <div className="absolute top-0 right-0 bg-purple-900/80 text-purple-200 text-[8px] font-bold px-1 rounded-bl-md z-20">MC: 10K</div>
+                            )}
                             <div className="flex flex-col text-[11px]">
                               {/* Home Team */}
                               <div className={`flex items-center justify-between px-2 py-1.5 border-b border-slate-800/50 ${m.winner === 'home' ? 'bg-[#d4af37]/10' : ''}`}>
                                 <div className="flex items-center gap-1.5 truncate">
                                   <span className={`truncate ${m.winner === 'away' ? 'text-slate-500 line-through' : 'text-slate-200 font-medium'}`}>{m.home_team ? m.home_team.name : 'TBD'}</span>
+                                  {m.is_draw_90 && m.penalty_qualifier === 'home' && (
+                                    <span className="text-[9px] font-bold bg-green-900/50 text-green-400 px-1 py-0.5 rounded ml-1" title="Avanza por Penales">(P)</span>
+                                  )}
                                 </div>
                                 <span className={`font-mono font-bold ${m.winner === 'home' ? 'text-[#d4af37]' : 'text-slate-400'}`}>{m.home_score !== null ? m.home_score : '-'}</span>
                               </div>
@@ -80,6 +89,9 @@ export default function BracketTab({ state }: { state: any }) {
                               <div className={`flex items-center justify-between px-2 py-1.5 ${m.winner === 'away' ? 'bg-[#d4af37]/10' : ''}`}>
                                 <div className="flex items-center gap-1.5 truncate">
                                   <span className={`truncate ${m.winner === 'home' ? 'text-slate-500 line-through' : 'text-slate-200 font-medium'}`}>{m.away_team ? m.away_team.name : 'TBD'}</span>
+                                  {m.is_draw_90 && m.penalty_qualifier === 'away' && (
+                                    <span className="text-[9px] font-bold bg-green-900/50 text-green-400 px-1 py-0.5 rounded ml-1" title="Avanza por Penales">(P)</span>
+                                  )}
                                 </div>
                                 <span className={`font-mono font-bold ${m.winner === 'away' ? 'text-[#d4af37]' : 'text-slate-400'}`}>{m.away_score !== null ? m.away_score : '-'}</span>
                               </div>
@@ -89,10 +101,13 @@ export default function BracketTab({ state }: { state: any }) {
                             {!m.winner && m.home_team && m.away_team && (
                               <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1 opacity-0 hover:opacity-100 transition-opacity">
                                 <Button size={"sm" as any} onClick={() => handleSimulateSingle(m.id)} disabled={simulatingBracket === m.id} className="bg-[#d4af37]/20 hover:bg-[#d4af37]/40 text-[#d4af37] border border-[#d4af37]/50 h-6 text-[10px] px-2 py-0 w-[80%]">
-                                  {simulatingBracket === m.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : '⚡ Simular'}
+                                  {simulatingBracket === m.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : '⚡ Simular Polla'}
                                 </Button>
-                                <Button size={"sm" as any} onClick={() => openMatchStatsModal(m.id, m.home_team.apiId, m.away_team.apiId, m.home_team.name, m.away_team.name)} className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 border border-blue-500/50 h-6 text-[10px] px-2 py-0 w-[80%]">
-                                  📊 Cuotas
+                                <Button size={"sm" as any} onClick={() => runMontecarlo(m.id)} disabled={simulatingBracket === m.id} className="bg-purple-500/20 hover:bg-purple-500/40 text-purple-400 border border-purple-500/50 h-6 text-[10px] px-2 py-0 w-[80%] mt-1">
+                                  {simulatingBracket === m.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : '🎲 Montecarlo'}
+                                </Button>
+                                <Button size={"sm" as any} onClick={() => openMatchStatsModal(m.id, m.home_team.apiId, m.away_team.apiId, m.home_team.name, m.away_team.name)} className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 border border-blue-500/50 h-6 text-[10px] px-2 py-0 w-[80%] mt-1">
+                                  📊 Ver Análisis
                                 </Button>
                               </div>
                             )}

@@ -99,10 +99,9 @@ export function useWorldCup() {
            try {
                const res = await fetch(`/api/worldcup/predict/${teamHome.apiId}/${teamAway.apiId}`);
                const data = await res.json();
-               const topScores = Object.entries(data.correct_score_top5);
-               if (topScores && topScores.length > 0) {
-                   const chosenScoreStr = getWeightedRandomScore(topScores);
-                   const [homeScore, awayScore] = chosenScoreStr.split('-').map(Number);
+               if (data.polla_score) {
+                   const homeScore = data.polla_score.home;
+                   const awayScore = data.polla_score.away;
                    
                    group.matches.push({
                        home: teamHome.name,
@@ -219,18 +218,26 @@ export function useWorldCup() {
     try {
       const res = await fetch(`/api/worldcup/predict/${match.home_team.apiId}/${match.away_team.apiId}`);
       const data = await res.json();
-      const topScores = Object.entries(data.correct_score_top5);
-      if (topScores && topScores.length > 0) {
-        let chosenScoreStr = getWeightedRandomScore(topScores);
-        let [homeScore, awayScore] = chosenScoreStr.split('-').map(Number);
-        if (homeScore === awayScore) {
-          const home1x2 = data['1x2'].home_win;
-          const away1x2 = data['1x2'].away_win;
-          if (home1x2 > away1x2) homeScore++; else awayScore++;
-        }
-        const winner = homeScore > awayScore ? 'home' : 'away';
+      
+      if (data.polla_score) {
+        const homeScore = data.polla_score.home;
+        const awayScore = data.polla_score.away;
+        const isDraw = homeScore === awayScore;
+        const penaltyQualifier = isDraw ? data.penalty_qualifier : null;
+        const winner = isDraw ? penaltyQualifier : (homeScore > awayScore ? 'home' : 'away');
         const winningTeam = winner === 'home' ? match.home_team : match.away_team;
-        currentBracket[matchId] = { ...match, home_score: homeScore, away_score: awayScore, winner };
+        
+        currentBracket[matchId] = { 
+          ...match, 
+          home_score: homeScore, 
+          away_score: awayScore, 
+          polla_score: data.polla_score,
+          is_draw_90: isDraw,
+          penalty_qualifier: penaltyQualifier,
+          winner,
+          montecarlo: data.montecarlo
+        };
+        
         if (match.nextMatchId && currentBracket[match.nextMatchId]) {
           const nextMatch = currentBracket[match.nextMatchId];
           if (match.isHomeNext) nextMatch.home_team = winningTeam;
@@ -240,6 +247,61 @@ export function useWorldCup() {
     } catch (e) { console.error(e); }
     finally { setSimulatingBracket(null); }
     return currentBracket;
+  };
+
+  const runMontecarlo = async (matchId: string) => {
+    const match = bracket[matchId];
+    if (!match.home_team || !match.away_team) return;
+    setSimulatingBracket(matchId); // Reuse this state for the spinner
+    try {
+      const res = await fetch('/api/worldcup/simulate/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home_id: match.home_team.apiId, away_id: match.away_team.apiId, simulations: 10000 })
+      });
+      const data = await res.json();
+      setBracket(prev => ({
+        ...prev,
+        [matchId]: {
+          ...prev[matchId],
+          montecarlo: data
+        }
+      }));
+    } catch (e) { console.error(e); }
+    finally { setSimulatingBracket(null); }
+  };
+
+  const exportPolla = () => {
+    // Generate a simple JSON containing group matches and bracket predictions
+    const exportData: any = { groups: [], bracket: [] };
+    
+    groups.forEach((g: any) => {
+      g.matches.forEach((m: any) => {
+        exportData.groups.push({ home: m.home, away: m.away, score: `${m.homeScore}-${m.awayScore}` });
+      });
+    });
+
+    Object.values(bracket).forEach(m => {
+      if (m.home_team && m.away_team && m.polla_score) {
+        exportData.bracket.push({
+          round: m.round,
+          home: m.home_team.name,
+          away: m.away_team.name,
+          score: `${m.polla_score.home}-${m.polla_score.away}`,
+          qualifier: m.penalty_qualifier ? (m.penalty_qualifier === 'home' ? m.home_team.name : m.away_team.name) : (m.polla_score.home > m.polla_score.away ? m.home_team.name : m.away_team.name)
+        });
+      }
+    });
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'polla_optima_2026.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleSimulateSingle = async (matchId: string) => {
@@ -271,6 +333,6 @@ export function useWorldCup() {
     scoreInputs, setScoreInputs, savingId, savePrediction,
     matchStats, loadingStats, openMatchStatsModal, selectedMatchModal, setSelectedMatchModal,
     bracket, setBracket, simulatingBracket, simulatingAll, bracketZoom, setBracketZoom,
-    handleSimulateSingle, handleSimulateAll
+    handleSimulateSingle, handleSimulateAll, runMontecarlo, exportPolla
   };
 }
