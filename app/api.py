@@ -352,7 +352,7 @@ def _run_worldcup_sync(resume: bool = True):
                     select(func.count(Fixture.id))
                     .where((Fixture.home_team_id == team_id) | (Fixture.away_team_id == team_id))
                 ).one()
-                if count >= 15:
+                if count >= 20:
                     logger.info(f"Team {team_id} already has {count} fixtures. Skipping.")
                     _wc_sync_status["processed"] = i + 2
                     continue
